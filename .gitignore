@@ -27,3 +27,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
+
+# Temporary transfer folders
+send/
+

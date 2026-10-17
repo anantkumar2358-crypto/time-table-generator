@@ -23,6 +23,8 @@ import {
   Download,
 } from 'lucide-react';
 
+import LightRays from './LightRays';
+
 const API_BASE = '/api';
 
 function generateSlotTimes(slotsCount, lunchIdx, startHour = 9, startMinute = 0) {
@@ -78,6 +80,15 @@ export default function App() {
   const [isMoving, setIsMoving] = useState(false);
 
   // Add Entity Modals
+  const [showAddCollegeModal, setShowAddCollegeModal] = useState(false);
+  const [newCollegeInfo, setNewCollegeInfo] = useState({
+    name: 'Apex Institute of Technology',
+    academic_term: 'Fall Semester 2026',
+    slots_per_day: 8,
+    lunch_slot_idx: 3,
+    max_daily_lecture_hours: 6,
+  });
+
   const [showAddBatchModal, setShowAddBatchModal] = useState(false);
   const [newBatch, setNewBatch] = useState({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '', max_daily_hours: '' });
 
@@ -434,6 +445,50 @@ export default function App() {
     setAnalytics(null);
   };
 
+  const handleCreateNewCollege = () => {
+    const collegeName = newCollegeInfo.name.trim() || 'My New College';
+    const term = newCollegeInfo.academic_term.trim() || 'Semester 2026';
+    const slots = parseInt(newCollegeInfo.slots_per_day, 10) || 8;
+    const lunch = parseInt(newCollegeInfo.lunch_slot_idx, 10) || 3;
+    const maxDaily = newCollegeInfo.max_daily_lecture_hours ? parseInt(newCollegeInfo.max_daily_lecture_hours, 10) : 6;
+    const slotTimes = generateSlotTimes(slots, lunch);
+
+    const freshDataset = {
+      name: collegeName,
+      academic_term: term,
+      time_config: {
+        days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        slots_per_day: slots,
+        lunch_slot_idx: lunch,
+        slot_times: slotTimes,
+        break_slot_indices: [],
+        max_daily_lecture_hours: maxDaily,
+      },
+      rooms: [],
+      faculty: [],
+      batches: [],
+      courses: [],
+      weights: {
+        weight_idle_student: 2.0,
+        weight_idle_faculty: 1.5,
+        weight_workload_balance: 1.2,
+        weight_room_utilization: 1.0,
+        weight_faculty_preference: 1.5,
+      },
+    };
+
+    setDataset(freshDataset);
+    setSelectedPresetId('custom');
+    lastLoadedPresetRef.current = 'custom';
+    setSchedule([]);
+    setAnalytics(null);
+    setSelectedBatchId('');
+    setSelectedFacultyId('');
+    setSelectedRoomId('');
+    setActiveTab('dataset');
+    setShowAddCollegeModal(false);
+  };
+
   const handleAddBatch = () => {
     if (!newBatch.name) return;
     const newId = `batch_${Date.now()}`;
@@ -786,6 +841,21 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Ambient Volumetric Light Rays Overlay */}
+      <div style={{ width: '100%', height: '600px', position: 'absolute', top: 0, left: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        <LightRays
+          raysOrigin="top-right"
+          raysColor="#ffffff"
+          raysSpeed={1}
+          lightSpread={0.5}
+          rayLength={3}
+          glow={0.6}
+          haze={0.25}
+          followMouse
+          mouseInfluence={0.1}
+        />
+      </div>
+
       {/* Hidden File Input for JSON Upload */}
       <input
         type="file"
@@ -799,12 +869,41 @@ export default function App() {
       <header className="app-header">
         <div className="header-inner">
           <div className="logo-section">
-            <div className="logo-badge">
-              <Calendar size={22} />
+            <div className="logo-badge" style={{ background: 'transparent', boxShadow: 'none', width: 'auto', height: 'auto', padding: 0 }}>
+              <svg width="38" height="38" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter: 'drop-shadow(0 4px 12px rgba(37, 99, 235, 0.45))' }}>
+                <defs>
+                  <linearGradient id="cf-logo-bg" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#0ea5e9"/>
+                    <stop offset="50%" stopColor="#2563eb"/>
+                    <stop offset="100%" stopColor="#7c3aed"/>
+                  </linearGradient>
+                  <linearGradient id="cf-flow-g1" x1="12" y1="20" x2="52" y2="28" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#38bdf8"/>
+                    <stop offset="100%" stopColor="#ffffff"/>
+                  </linearGradient>
+                  <linearGradient id="cf-flow-g2" x1="12" y1="34" x2="52" y2="44" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#ffffff"/>
+                    <stop offset="100%" stopColor="#a78bfa"/>
+                  </linearGradient>
+                </defs>
+                <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#cf-logo-bg)"/>
+                <rect x="5" y="5" width="54" height="54" rx="15" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"/>
+                <path d="M16 22C23 22 26 17 34 17C42 17 44 23 50 23" stroke="url(#cf-flow-g1)" strokeWidth="3.5" strokeLinecap="round"/>
+                <path d="M14 32C22 32 25 28 32 28C39 28 42 36 50 36" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round"/>
+                <path d="M16 42C22 42 26 46 33 46C41 46 44 40 48 40" stroke="url(#cf-flow-g2)" strokeWidth="3.5" strokeLinecap="round"/>
+                <circle cx="16" cy="22" r="3" fill="#ffffff"/>
+                <circle cx="34" cy="17" r="3" fill="#7dd3fc"/>
+                <circle cx="50" cy="23" r="3" fill="#ffffff"/>
+                <circle cx="23" cy="30" r="2.5" fill="#bae6fd"/>
+                <circle cx="41" cy="32" r="2.5" fill="#e0e7ff"/>
+                <circle cx="33" cy="46" r="3" fill="#c4b5fd"/>
+              </svg>
             </div>
             <div>
               <div className="app-title">
-                Chronos AI Timetable Studio
+                <span style={{ fontWeight: 800, letterSpacing: '-0.02em', display: 'inline-flex', alignItems: 'center' }}>
+                  Class<span style={{ background: 'linear-gradient(135deg, #38bdf8, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Flow</span>
+                </span>
                 <span className="pill pill-success" style={{ fontSize: '0.65rem', padding: '0.15rem 0.45rem' }}>
                   <ShieldCheck size={12} /> Conflict-Free Engine
                 </span>
@@ -818,7 +917,13 @@ export default function App() {
             <select
               className="select-control"
               value={selectedPresetId}
-              onChange={(e) => setSelectedPresetId(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setShowAddCollegeModal(true);
+                } else {
+                  setSelectedPresetId(e.target.value);
+                }
+              }}
               title="Select Campus Preset"
             >
               {presets.map((p) => (
@@ -826,8 +931,20 @@ export default function App() {
                   {p.name} ({p.batches_count} Batches, {p.courses_count} Courses)
                 </option>
               ))}
-              <option value="custom">Custom Configured College</option>
+              <option value="custom">
+                {selectedPresetId === 'custom' ? `Custom: ${dataset?.name || 'My College'}` : '+ Add New College'}
+              </option>
             </select>
+
+            {/* Dedicated Add New College Button */}
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => setShowAddCollegeModal(true)}
+              title="Add a new college / institution and enter custom information"
+              style={{ borderColor: 'rgba(59, 130, 246, 0.4)', color: '#60a5fa' }}
+            >
+              <Plus size={15} /> Add New College
+            </button>
 
             {/* Dedicated CP-SAT Engine Badge */}
             <div className="engine-badge" title="Powered by Google OR-Tools CP-SAT Solver (8 Parallel CPU Cores)">
@@ -871,7 +988,7 @@ export default function App() {
         {analytics && (
           <div className="kpi-grid">
             <div className="kpi-card">
-              <div className="kpi-icon-wrapper" style={{ background: '#eff6ff', color: '#2563eb' }}>
+              <div className="kpi-icon-wrapper" style={{ background: 'rgba(59, 130, 246, 0.16)', color: '#60a5fa' }}>
                 <Sparkles size={22} />
               </div>
               <div className="kpi-info">
@@ -882,12 +999,12 @@ export default function App() {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrapper" style={{ background: analytics.hard_conflicts_count === 0 ? '#ecfdf5' : '#fef2f2', color: analytics.hard_conflicts_count === 0 ? '#10b981' : '#ef4444' }}>
+              <div className="kpi-icon-wrapper" style={{ background: analytics.hard_conflicts_count === 0 ? 'rgba(16, 185, 129, 0.16)' : 'rgba(239, 68, 68, 0.16)', color: analytics.hard_conflicts_count === 0 ? '#34d399' : '#f87171' }}>
                 {analytics.hard_conflicts_count === 0 ? <CheckCircle2 size={22} /> : <AlertTriangle size={22} />}
               </div>
               <div className="kpi-info">
                 <div className="kpi-label">Hard Conflicts</div>
-                <div className="kpi-value" style={{ color: analytics.hard_conflicts_count === 0 ? '#10b981' : '#ef4444' }}>
+                <div className="kpi-value" style={{ color: analytics.hard_conflicts_count === 0 ? '#34d399' : '#f87171' }}>
                   {analytics.hard_conflicts_count === 0 ? '0 (Clash-Free)' : `${analytics.hard_conflicts_count} Clashes`}
                 </div>
                 <div className="kpi-sub">Faculty, room & batch integrity</div>
@@ -895,7 +1012,7 @@ export default function App() {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrapper" style={{ background: '#f5f3ff', color: '#8b5cf6' }}>
+              <div className="kpi-icon-wrapper" style={{ background: 'rgba(168, 85, 247, 0.16)', color: '#c084fc' }}>
                 <Building2 size={22} />
               </div>
               <div className="kpi-info">
@@ -906,7 +1023,7 @@ export default function App() {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrapper" style={{ background: '#fffbeb', color: '#f59e0b' }}>
+              <div className="kpi-icon-wrapper" style={{ background: 'rgba(245, 158, 11, 0.16)', color: '#fbbf24' }}>
                 <Clock size={22} />
               </div>
               <div className="kpi-info">
@@ -917,7 +1034,7 @@ export default function App() {
             </div>
 
             <div className="kpi-card">
-              <div className="kpi-icon-wrapper" style={{ background: '#ecfdf5', color: '#059669' }}>
+              <div className="kpi-icon-wrapper" style={{ background: 'rgba(16, 185, 129, 0.16)', color: '#34d399' }}>
                 <GraduationCap size={22} />
               </div>
               <div className="kpi-info">
@@ -1037,8 +1154,8 @@ export default function App() {
                   </div>
                   <div className="empty-hero-title">Configure Your Campus Data</div>
                   <div className="empty-hero-desc">
-                    Your custom college currently has <b>{dataset.batches.length} batches</b>, <b>{dataset.rooms.length} rooms</b>, and <b>{dataset.courses.length} courses</b>.
-                    <br />Please add your student batches, faculty, rooms, and courses in the Data Editor to generate a conflict-free timetable.
+                    <b>{dataset.name}</b> currently has <b>{dataset.batches.length} batches</b>, <b>{dataset.rooms.length} rooms</b>, and <b>{dataset.courses.length} courses</b>.
+                    <br />Add your student batches, faculty, rooms, and courses in the Campus Data Editor below to generate a conflict-free timetable.
                   </div>
                   <button
                     className="btn btn-primary"
@@ -1234,7 +1351,7 @@ export default function App() {
             {/* Conflict Auditor Summary */}
             <div className="analytics-card" style={{ gridColumn: '1 / -1' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <ShieldCheck size={20} color={analytics.hard_conflicts_count === 0 ? '#10b981' : '#ef4444'} />
                   Conflict Auditor & Constraint Verification Report
                 </h3>
@@ -1244,13 +1361,13 @@ export default function App() {
               </div>
 
               {analytics.hard_conflicts_count === 0 ? (
-                <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '1rem', color: '#065f46', fontSize: '0.875rem' }}>
+                <div style={{ background: 'rgba(16, 185, 129, 0.16)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '8px', padding: '1rem', color: '#34d399', fontSize: '0.875rem' }}>
                   <b>Zero Hard Constraints Violated:</b> All faculty assignments, room occupancies, student batch schedules, capacity requirements, lab block continuities, and blackout periods were strictly verified with no clashes.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {analytics.conflict_list.map((c, i) => (
-                    <div key={i} style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.65rem', color: '#991b1b', fontSize: '0.8rem' }}>
+                    <div key={i} style={{ background: 'rgba(239, 68, 68, 0.16)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', padding: '0.65rem', color: '#f87171', fontSize: '0.8rem' }}>
                       {c}
                     </div>
                   ))}
@@ -1260,8 +1377,8 @@ export default function App() {
 
             {/* Faculty Workload Chart */}
             <div className="analytics-card">
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <GraduationCap size={18} color="#2563eb" /> Faculty Weekly Teaching Load & Gaps
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <GraduationCap size={18} color="#60a5fa" /> Faculty Weekly Teaching Load & Gaps
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                 {Object.entries(analytics.faculty_workloads).map(([fid, f]) => {
@@ -1274,7 +1391,7 @@ export default function App() {
                         <span>{f.total_weekly_hours} hrs/wk ({f.idle_gap_hours} idle gaps)</span>
                       </div>
                       <div className="progress-bar-container">
-                        <div className="progress-bar-fill" style={{ width: `${pct}%`, background: '#2563eb' }} />
+                        <div className="progress-bar-fill" style={{ width: `${pct}%`, background: '#3b82f6' }} />
                       </div>
                     </div>
                   );
@@ -1284,8 +1401,8 @@ export default function App() {
 
             {/* Room Occupancy & Utilization */}
             <div className="analytics-card">
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Building2 size={18} color="#059669" /> Classroom & Laboratory Utilization
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Building2 size={18} color="#34d399" /> Classroom & Laboratory Utilization
               </h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                 {Object.entries(analytics.room_occupancy).map(([rid, r]) => (
@@ -1295,7 +1412,7 @@ export default function App() {
                       <span>{r.occupied_hours} hrs ({r.utilization_percent}%)</span>
                     </div>
                     <div className="progress-bar-container">
-                      <div className="progress-bar-fill" style={{ width: `${r.utilization_percent}%`, background: '#059669' }} />
+                      <div className="progress-bar-fill" style={{ width: `${r.utilization_percent}%`, background: '#10b981' }} />
                     </div>
                   </div>
                 ))}
@@ -1304,14 +1421,14 @@ export default function App() {
 
             {/* Detailed Metric KPI Breakdown */}
             <div className="analytics-card" style={{ gridColumn: '1 / -1' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginBottom: '1rem' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '1rem' }}>
                 Full Optimization Metric Breakdown
               </h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
                 {Object.entries(analytics.metrics_breakdown).map(([k, m]) => (
-                  <div key={k} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.85rem' }}>
+                  <div key={k} style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-muted)', borderRadius: '8px', padding: '0.85rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: '#475569' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                         {k.replace(/_/g, ' ')}
                       </span>
                       <span className={`pill ${m.status === 'excellent' ? 'pill-success' : m.status === 'warning' ? 'pill-warning' : 'pill-danger'}`}>
@@ -1329,26 +1446,63 @@ export default function App() {
         {/* View 3: Dataset & Configuration Editor */}
         {activeTab === 'dataset' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {/* Action Bar for Custom JSON Configuration */}
-            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  Interactive Campus Data & Constraint Configuration
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  All college data is 100% configurable. You can add/delete rooms, faculty, and courses, or export/import custom JSON files.
-                </p>
+            {/* Action Bar & College Identity Configuration */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '12px', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Building2 size={18} color="#60a5fa" /> College Information & Campus Data Editor
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>
+                    All institution data is 100% configurable. You can create a new college, edit details, add/remove batches, rooms, faculty, and courses.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowAddCollegeModal(true)} title="Add a brand new college and configure from scratch">
+                    <Plus size={14} /> Add New College
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => fileInputRef.current?.click()} title="Import any college JSON dataset">
+                    <Upload size={14} /> Import Custom JSON
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={handleExportJson} title="Export current config as JSON template">
+                    <Download size={14} /> Export Config JSON
+                  </button>
+                  <button className="btn btn-outline btn-sm" onClick={() => runGenerate(dataset)}>
+                    <RefreshCw size={14} /> Re-Generate Schedule
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button className="btn btn-outline btn-sm" onClick={() => fileInputRef.current?.click()} title="Import any college JSON dataset">
-                  <Upload size={14} /> Import Custom JSON
-                </button>
-                <button className="btn btn-outline btn-sm" onClick={handleExportJson} title="Export current config as JSON template">
-                  <Download size={14} /> Export Config JSON
-                </button>
-                <button className="btn btn-primary btn-sm" onClick={() => runGenerate(dataset)}>
-                  <RefreshCw size={14} /> Re-Generate Schedule
-                </button>
+
+              {/* Editable College Name and Term */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>College / University Name</label>
+                  <input
+                    type="text"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={dataset.name}
+                    onChange={(e) => {
+                      setDataset({ ...dataset, name: e.target.value });
+                      invalidateCurrentCache();
+                    }}
+                    placeholder="e.g. Apex Institute of Technology"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Academic Term / Session</label>
+                  <input
+                    type="text"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={dataset.academic_term}
+                    onChange={(e) => {
+                      setDataset({ ...dataset, academic_term: e.target.value });
+                      invalidateCurrentCache();
+                    }}
+                    placeholder="e.g. Fall Semester 2026"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1356,8 +1510,8 @@ export default function App() {
             <div className="timing-config-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div>
-                  <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Clock size={18} color="#2563eb" /> Daily Schedule & Lecture Duration Configuration
+                  <h4 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Clock size={18} color="#60a5fa" /> Daily Schedule & Lecture Duration Configuration
                   </h4>
                   <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
                     Configure total periods per day (e.g. 6-hour vs 8-hour day) and maximum daily lecture limits per student batch.
@@ -1451,9 +1605,10 @@ export default function App() {
 
             <div className="analytics-grid">
               {/* Student Batches Card */}
+              {/* Student Batches Card */}
               <div className="analytics-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Users size={16} /> Student Batches ({dataset.batches.length})
                   </h4>
                   <button className="btn btn-outline btn-sm" onClick={() => setShowAddBatchModal(true)}>
@@ -1467,10 +1622,10 @@ export default function App() {
                     </div>
                   ) : (
                     dataset.batches.map((b) => (
-                      <div key={b.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={b.id} style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-muted)', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{b.name}</div>
-                          <div style={{ color: '#64748b' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{b.name}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>
                             {b.department} &bull; Semester <b>{b.semester}</b> &bull; <b>{b.size}</b> students
                           </div>
                         </div>
@@ -1490,7 +1645,7 @@ export default function App() {
               {/* Rooms & Facilities Card */}
               <div className="analytics-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <Building2 size={16} /> Rooms & Labs ({dataset.rooms.length})
                   </h4>
                   <button className="btn btn-outline btn-sm" onClick={() => setShowAddRoomModal(true)}>
@@ -1504,10 +1659,10 @@ export default function App() {
                     </div>
                   ) : (
                     dataset.rooms.map((r) => (
-                      <div key={r.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={r.id} style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-muted)', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.name}</div>
-                          <div style={{ color: '#64748b' }}>Type: {r.room_type} &bull; Capacity: <b>{r.capacity}</b> seats &bull; {r.building}</div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{r.name}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>Type: {r.room_type} &bull; Capacity: <b>{r.capacity}</b> seats &bull; {r.building}</div>
                         </div>
                         <button
                           style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
@@ -1525,7 +1680,7 @@ export default function App() {
               {/* Faculty Card */}
               <div className="analytics-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <GraduationCap size={16} /> Faculty Profiles ({dataset.faculty.length})
                   </h4>
                   <button className="btn btn-outline btn-sm" onClick={() => setShowAddFacultyModal(true)}>
@@ -1539,11 +1694,11 @@ export default function App() {
                     </div>
                   ) : (
                     dataset.faculty.map((f) => (
-                      <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={f.id} style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-muted)', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{f.name}</div>
-                          <div style={{ color: '#64748b' }}>{f.designation} &bull; {f.department} &bull; Max: {f.max_daily_hours}h/day</div>
-                          <div style={{ fontSize: '0.72rem', color: '#e11d48', marginTop: '0.2rem' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{f.name}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>{f.designation} &bull; {f.department} &bull; Max: {f.max_daily_hours}h/day</div>
+                          <div style={{ fontSize: '0.72rem', color: '#f43f5e', marginTop: '0.2rem' }}>
                             Unavailable: {f.unavailable_slots.length > 0 ? `${f.unavailable_slots.length} blackout slots` : 'Full availability'}
                           </div>
                         </div>
@@ -1563,7 +1718,7 @@ export default function App() {
               {/* Courses Card */}
               <div className="analytics-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     <BookOpen size={16} /> Courses & Labs ({dataset.courses.length})
                   </h4>
                   <button className="btn btn-outline btn-sm" onClick={() => setShowAddCourseModal(true)}>
@@ -1577,10 +1732,10 @@ export default function App() {
                     </div>
                   ) : (
                     dataset.courses.map((c) => (
-                      <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div key={c.id} style={{ border: '1px solid var(--border-subtle)', background: 'var(--bg-muted)', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.code}: {c.name}</div>
-                          <div style={{ color: '#64748b' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{c.code}: {c.name}</div>
+                          <div style={{ color: 'var(--text-muted)' }}>
                             {c.course_type} &bull; {c.weekly_hours} hrs/wk ({c.consecutive_slots > 1 ? `${c.consecutive_slots}h block` : '1h lecture'}) &bull; Req: {c.room_type_required}
                           </div>
                         </div>
@@ -1600,6 +1755,114 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Modal: Add New College */}
+      {showAddCollegeModal && (
+        <div className="modal-overlay" onClick={() => setShowAddCollegeModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)' }}>
+                <Building2 size={18} color="#60a5fa" /> Add New College / Institution
+              </h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowAddCollegeModal(false)}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: 0 }}>
+                Set up a fresh institution profile. You can configure your schedule structure and immediately add student batches, classrooms, faculty, and courses to generate a personalized timetable.
+              </p>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>College / University Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Apex University of Engineering & Tech"
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newCollegeInfo.name}
+                  onChange={(e) => setNewCollegeInfo({ ...newCollegeInfo, name: e.target.value })}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Academic Term / Session</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Fall Semester 2026"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCollegeInfo.academic_term}
+                    onChange={(e) => setNewCollegeInfo({ ...newCollegeInfo, academic_term: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Daily Periods / Slots</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCollegeInfo.slots_per_day}
+                    onChange={(e) => setNewCollegeInfo({ ...newCollegeInfo, slots_per_day: e.target.value })}
+                  >
+                    <option value={6}>6 Periods / Day (Compact Schedule)</option>
+                    <option value={7}>7 Periods / Day (Moderate Schedule)</option>
+                    <option value={8}>8 Periods / Day (Standard Schedule)</option>
+                    <option value={9}>9 Periods / Day (Extended Schedule)</option>
+                    <option value={10}>10 Periods / Day (Full Day Operations)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Lunch Recess Placement</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCollegeInfo.lunch_slot_idx}
+                    onChange={(e) => setNewCollegeInfo({ ...newCollegeInfo, lunch_slot_idx: e.target.value })}
+                  >
+                    <option value={2}>After Period 2 (Slot 3)</option>
+                    <option value={3}>After Period 3 (Slot 4 - Standard)</option>
+                    <option value={4}>After Period 4 (Slot 5)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Max Daily Lecture Cap (Per Batch)</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCollegeInfo.max_daily_lecture_hours}
+                    onChange={(e) => setNewCollegeInfo({ ...newCollegeInfo, max_daily_lecture_hours: e.target.value })}
+                  >
+                    <option value={4}>4 Hours Max</option>
+                    <option value={5}>5 Hours Max</option>
+                    <option value={6}>6 Hours Max (Recommended Standard)</option>
+                    <option value={7}>7 Hours Max</option>
+                    <option value={8}>8 Hours Max</option>
+                    <option value="">No Daily Cap</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button className="btn btn-outline" onClick={() => setShowAddCollegeModal(false)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleCreateNewCollege}
+                  disabled={!newCollegeInfo.name.trim()}
+                >
+                  <Plus size={16} /> Create College & Add Info
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Add Batch */}
       {showAddBatchModal && (
@@ -2072,7 +2335,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setInspectSlot(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>
                 {inspectSlot.course_code}: {inspectSlot.course_name}
               </h3>
               <button className="btn btn-outline btn-sm" onClick={() => setInspectSlot(null)}>
@@ -2080,20 +2343,20 @@ export default function App() {
               </button>
             </div>
             <div className="modal-body">
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.85rem', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <div style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '0.85rem', fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', color: 'var(--text-main)' }}>
                 <div><b>Batch:</b> {inspectSlot.batch_name}</div>
                 <div><b>Faculty:</b> {inspectSlot.faculty_name}</div>
                 <div><b>Room:</b> {inspectSlot.room_name}</div>
                 <div><b>Current Slot:</b> {inspectSlot.day_name}, {inspectSlot.slot_time} ({inspectSlot.duration} period{inspectSlot.duration > 1 ? 's' : ''})</div>
               </div>
 
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e3a8a', marginTop: '0.5rem' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#60a5fa', marginTop: '0.5rem' }}>
                 Move or Swap Slot (With Live Conflict Verification)
               </h4>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>Target Day</label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Target Day</label>
                   <select
                     className="select-control"
                     style={{ width: '100%', marginTop: '0.25rem' }}
@@ -2107,7 +2370,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>Target Start Slot</label>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Target Start Slot</label>
                   <select
                     className="select-control"
                     style={{ width: '100%', marginTop: '0.25rem' }}
@@ -2123,7 +2386,7 @@ export default function App() {
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}>Assigned Classroom / Lab</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Assigned Classroom / Lab</label>
                 <select
                   className="select-control"
                   style={{ width: '100%', marginTop: '0.25rem' }}
@@ -2138,9 +2401,9 @@ export default function App() {
 
               {/* Real-time Pre-validation Clash Indicator */}
               {preValidationConflicts.length > 0 ? (
-                <div style={{ marginTop: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', color: '#b91c1c', fontSize: '0.8rem' }}>
+                <div style={{ marginTop: '0.75rem', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', padding: '0.75rem', color: '#fca5a5', fontSize: '0.8rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}>
-                    <AlertTriangle size={16} color="#dc2626" /> Cannot Move Here — Hard Conflicts Detected:
+                    <AlertTriangle size={16} color="#f87171" /> Cannot Move Here — Hard Conflicts Detected:
                   </div>
                   <ul style={{ paddingLeft: '1.2rem', marginTop: '0.35rem', marginBottom: 0 }}>
                     {preValidationConflicts.map((c, i) => (
@@ -2150,8 +2413,8 @@ export default function App() {
                 </div>
               ) : (
                 !(parseInt(moveTargetDay, 10) === inspectSlot.day_idx && parseInt(moveTargetSlot, 10) === inspectSlot.slot_idx && (moveTargetRoom || inspectSlot.room_id) === inspectSlot.room_id) && (
-                  <div style={{ marginTop: '0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.6rem 0.75rem', color: '#166534', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                    <CheckCircle2 size={16} color="#16a34a" />
+                  <div style={{ marginTop: '0.75rem', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '8px', padding: '0.6rem 0.75rem', color: '#6ee7b7', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <CheckCircle2 size={16} color="#34d399" />
                     <span><b>Slot Available:</b> Zero clashes detected! Target room and time slot are fully clear.</span>
                   </div>
                 )
@@ -2160,9 +2423,9 @@ export default function App() {
               {moveFeedback && (
                 <div style={{ marginTop: '0.75rem' }}>
                   {moveFeedback.hasConflicts ? (
-                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', color: '#b91c1c', fontSize: '0.8rem' }}>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.35)', borderRadius: '8px', padding: '0.75rem', color: '#fca5a5', fontSize: '0.8rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}>
-                        <AlertTriangle size={16} color="#dc2626" /> Move Blocked by Engine:
+                        <AlertTriangle size={16} color="#f87171" /> Move Blocked by Engine:
                       </div>
                       <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem', marginBottom: 0 }}>
                         {moveFeedback.conflicts.map((c, i) => (
@@ -2171,8 +2434,8 @@ export default function App() {
                       </ul>
                     </div>
                   ) : (
-                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '0.75rem', color: '#047857', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <CheckCircle2 size={16} color="#059669" />
+                    <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)', borderRadius: '8px', padding: '0.75rem', color: '#6ee7b7', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <CheckCircle2 size={16} color="#34d399" />
                       <span><b>Move Executed:</b> Slot relocated with 0 hard conflicts! Quality score: {moveFeedback.qualityScore}/100.</span>
                     </div>
                   )}
@@ -2324,7 +2587,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="app-footer">
-        Powered by Google OR-Tools CP-SAT Exact Constraint Solver &bull; Intelligent College Timetable Generator
+        ClassFlow &bull; Powered by Google OR-Tools CP-SAT Constraint Engine &bull; Conflict-Free Timetable Studio
       </footer>
     </div>
   );

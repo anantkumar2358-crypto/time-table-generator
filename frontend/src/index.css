@@ -4,30 +4,33 @@
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --bg-primary: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-muted: #f1f5f9;
-  --bg-card: #ffffff;
+  /* Professional Dark Theme Palette */
+  --bg-primary: #080c14;
+  --bg-surface: #0f172a;
+  --bg-muted: #162034;
+  --bg-card: #111827;
+  --bg-card-hover: #172238;
 
-  --border-subtle: #e2e8f0;
-  --border-medium: #cbd5e1;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.15);
+  --border-highlight: rgba(59, 130, 246, 0.4);
 
-  --text-main: #0f172a;
-  --text-muted: #475569;
-  --text-dim: #94a3b8;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
 
-  --primary: #2563eb;
-  --primary-hover: #1d4ed8;
-  --primary-light: #eff6ff;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-light: rgba(59, 130, 246, 0.18);
 
   --success: #10b981;
-  --success-light: #ecfdf5;
+  --success-light: rgba(16, 185, 129, 0.18);
   --warning: #f59e0b;
-  --warning-light: #fffbeb;
+  --warning-light: rgba(245, 158, 11, 0.18);
   --danger: #ef4444;
-  --danger-light: #fef2f2;
-  --purple: #8b5cf6;
-  --purple-light: #f5f3ff;
+  --danger-light: rgba(239, 68, 68, 0.18);
+  --purple: #a855f7;
+  --purple-light: rgba(168, 85, 247, 0.18);
 }
 
 * {
@@ -54,14 +57,14 @@ button, input, select {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #090d16;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #233148;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #334464;
 }
 
 /* Container */
@@ -69,16 +72,20 @@ button, input, select {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+  background-color: var(--bg-primary);
 }
 
 /* Header */
 .app-header {
-  background: #ffffff;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border-subtle);
   position: sticky;
   top: 0;
   z-index: 40;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
 .header-inner {
@@ -99,7 +106,7 @@ button, input, select {
 }
 
 .logo-badge {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
   color: white;
   width: 40px;
   height: 40px;
@@ -107,14 +114,14 @@ button, input, select {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
 }
 
 .app-title {
   font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.025em;
-  color: #0f172a;
+  color: #f8fafc;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -122,7 +129,7 @@ button, input, select {
 
 .app-subtitle {
   font-size: 0.75rem;
-  color: #64748b;
+  color: #94a3b8;
   font-weight: 500;
 }
 
@@ -150,11 +157,11 @@ button, input, select {
 .btn-primary {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   color: white;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
 }
 .btn-primary:hover {
-  background: linear-gradient(135deg, #1d4ed8, #1e40af);
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.45);
   transform: translateY(-1px);
 }
 .btn-primary:active {
@@ -162,14 +169,14 @@ button, input, select {
 }
 
 .btn-outline {
-  background: #ffffff;
+  background: #141c2e;
   border-color: var(--border-medium);
-  color: var(--text-muted);
+  color: var(--text-main);
 }
 .btn-outline:hover {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: var(--text-main);
+  background: #1b263d;
+  border-color: #64748b;
+  color: #ffffff;
 }
 
 .btn-sm {
@@ -181,7 +188,7 @@ button, input, select {
   padding: 0.5rem 0.85rem;
   border-radius: 8px;
   border: 1px solid var(--border-medium);
-  background: #ffffff;
+  background: #141c2e;
   color: var(--text-main);
   font-size: 0.875rem;
   font-weight: 500;
@@ -191,7 +198,11 @@ button, input, select {
 }
 .select-control:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+.select-control option {
+  background: #111827;
+  color: #f8fafc;
 }
 
 .engine-badge {
@@ -199,12 +210,12 @@ button, input, select {
   align-items: center;
   gap: 0.45rem;
   padding: 0.45rem 0.85rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: rgba(59, 130, 246, 0.14);
+  border: 1px solid rgba(59, 130, 246, 0.35);
   border-radius: 8px;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #1d4ed8;
+  color: #93c5fd;
   letter-spacing: -0.01em;
   user-select: none;
 }
@@ -219,6 +230,8 @@ button, input, select {
   flex-direction: column;
   gap: 1.5rem;
   flex: 1;
+  position: relative;
+  z-index: 1;
 }
 
 /* Top KPI Bar */
@@ -236,11 +249,12 @@ button, input, select {
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
 .kpi-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  border-color: var(--border-medium);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   transform: translateY(-1px);
 }
 
@@ -262,24 +276,25 @@ button, input, select {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: #94a3b8;
   margin-bottom: 0.2rem;
 }
 .kpi-value {
   font-size: 1.35rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #f8fafc;
   line-height: 1.2;
 }
 .kpi-sub {
   font-size: 0.72rem;
-  color: #94a3b8;
+  color: #64748b;
   margin-top: 0.15rem;
 }
 
 /* Control Navigation Bar */
 .nav-tabs-wrapper {
-  background: #ffffff;
+  background: rgba(17, 24, 39, 0.85);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 0.6rem 0.85rem;
@@ -288,7 +303,7 @@ button, input, select {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .nav-tabs {
@@ -308,17 +323,17 @@ button, input, select {
   font-weight: 600;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: #94a3b8;
   cursor: pointer;
   transition: all 0.15s;
 }
 .tab-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: #1e293b;
+  color: #f8fafc;
 }
 .tab-btn.active {
   background: var(--primary-light);
-  color: var(--primary);
+  color: #60a5fa;
   font-weight: 700;
 }
 
@@ -330,17 +345,17 @@ button, input, select {
 
 /* Timetable Grid View */
 .timetable-wrapper {
-  background: #ffffff;
+  background: #111827;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
 .timetable-header {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border-subtle);
-  background: #ffffff;
+  background: #141c2e;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -360,8 +375,8 @@ button, input, select {
 }
 
 .schedule-grid-table th {
-  background: #f8fafc;
-  color: #334155;
+  background: #141c2e;
+  color: #cbd5e1;
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -378,10 +393,10 @@ button, input, select {
 }
 
 .day-cell {
-  background: #f8fafc;
+  background: #141c2e;
   font-weight: 700;
   font-size: 0.85rem;
-  color: #1e293b;
+  color: #f8fafc;
   padding: 0.75rem 1rem;
   border: 1px solid var(--border-subtle);
   vertical-align: middle;
@@ -394,22 +409,22 @@ button, input, select {
   padding: 0.45rem;
   vertical-align: top;
   min-height: 85px;
-  background: #ffffff;
+  background: #0b111e;
   transition: background 0.15s;
 }
 
 .slot-cell:hover {
-  background: #fbfcfe;
+  background: #111a2e;
 }
 
 .slot-lunch {
-  background: #fefce8 !important;
-  color: #a16207;
+  background: rgba(234, 179, 8, 0.1) !important;
+  color: #facc15 !important;
   font-size: 0.75rem;
   font-weight: 700;
   text-align: center;
   vertical-align: middle;
-  border-color: #fef08a !important;
+  border-color: rgba(234, 179, 8, 0.25) !important;
 }
 
 .slot-empty {
@@ -417,7 +432,7 @@ button, input, select {
   align-items: center;
   justify-content: center;
   min-height: 75px;
-  color: #cbd5e1;
+  color: #334155;
   font-size: 0.85rem;
   user-select: none;
 }
@@ -426,10 +441,11 @@ button, input, select {
 .class-card {
   border-radius: 8px;
   padding: 0.55rem 0.65rem;
-  color: #0f172a;
-  background: #f8fafc;
+  color: #f8fafc;
+  background: #172238;
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-left: 4px solid var(--primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
@@ -440,7 +456,9 @@ button, input, select {
 
 .class-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  background: #1e2c47;
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
 .class-card-top {
@@ -454,7 +472,7 @@ button, input, select {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 700;
-  color: #1e3a8a;
+  color: #60a5fa;
 }
 
 .badge-tag {
@@ -466,24 +484,24 @@ button, input, select {
 }
 
 .badge-lab {
-  background: #ede9fe;
-  color: #6d28d9;
+  background: rgba(168, 85, 247, 0.2);
+  color: #d8b4fe;
 }
 .badge-theory {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
 }
 
 .class-title {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #0f172a;
+  color: #f8fafc;
   line-height: 1.2;
 }
 
 .class-meta {
   font-size: 0.72rem;
-  color: #475569;
+  color: #94a3b8;
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
@@ -503,8 +521,8 @@ button, input, select {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
   z-index: 50;
   display: flex;
   align-items: center;
@@ -513,13 +531,15 @@ button, input, select {
 }
 
 .modal-content {
-  background: #ffffff;
+  background: #111827;
+  border: 1px solid var(--border-medium);
   border-radius: 16px;
   max-width: 650px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  color: #f8fafc;
 }
 
 .modal-header {
@@ -548,16 +568,16 @@ button, input, select {
   font-weight: 700;
 }
 .pill-success {
-  background: #dcfce7;
-  color: #15803d;
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
 }
 .pill-warning {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
 }
 .pill-danger {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
 }
 
 /* Analytics Tab Layout */
@@ -568,16 +588,16 @@ button, input, select {
 }
 
 .analytics-card {
-  background: #ffffff;
+  background: #111827;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .progress-bar-container {
   height: 8px;
-  background: #e2e8f0;
+  background: #1e293b;
   border-radius: 4px;
   overflow: hidden;
   margin-top: 0.35rem;
@@ -592,12 +612,14 @@ button, input, select {
 /* Footer */
 .app-footer {
   margin-top: auto;
-  background: #ffffff;
+  background: #0b0f19;
   border-top: 1px solid var(--border-subtle);
   padding: 1rem 1.5rem;
   text-align: center;
   font-size: 0.8rem;
   color: #64748b;
+  position: relative;
+  z-index: 1;
 }
 
 @media (max-width: 768px) {
@@ -617,8 +639,8 @@ button, input, select {
 .optim-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(10px);
   z-index: 100;
   display: flex;
   align-items: center;
@@ -633,18 +655,18 @@ button, input, select {
 }
 
 .optim-modal-content {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: #111827;
+  border: 1px solid var(--border-medium);
   border-radius: 20px;
   max-width: 620px;
   width: 100%;
-  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
   overflow: hidden;
 }
 
 .optim-header {
   padding: 1.25rem 1.5rem;
-  background: linear-gradient(135deg, #1e3a8a, #1e40af);
+  background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
   color: #ffffff;
   display: flex;
   align-items: center;
@@ -693,11 +715,11 @@ button, input, select {
 
 .optim-progress-track {
   height: 14px;
-  background: #f1f5f9;
+  background: #1e293b;
   border-radius: 9999px;
   overflow: hidden;
   position: relative;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-subtle);
 }
 
 .optim-progress-fill {
@@ -722,8 +744,8 @@ button, input, select {
 }
 
 .optim-hud-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #0d1424;
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 0.75rem;
   text-align: center;
@@ -734,14 +756,14 @@ button, input, select {
   font-size: 0.68rem;
   text-transform: uppercase;
   font-weight: 700;
-  color: #64748b;
+  color: #94a3b8;
   letter-spacing: 0.04em;
 }
 
 .optim-hud-val {
   font-size: 1.2rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #f8fafc;
   margin-top: 0.15rem;
 }
 
@@ -750,8 +772,8 @@ button, input, select {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #0d1424;
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 0.85rem 1rem;
 }
@@ -761,17 +783,17 @@ button, input, select {
   align-items: center;
   gap: 0.65rem;
   font-size: 0.82rem;
-  color: #475569;
+  color: #94a3b8;
   transition: all 0.2s;
 }
 
 .optim-step-row.completed {
-  color: #0f172a;
+  color: #f8fafc;
   font-weight: 600;
 }
 
 .optim-step-row.active {
-  color: #2563eb;
+  color: #60a5fa;
   font-weight: 700;
 }
 
@@ -786,17 +808,17 @@ button, input, select {
 
 .optim-details-text {
   font-size: 0.78rem;
-  color: #64748b;
+  color: #94a3b8;
   font-style: italic;
   padding: 0.4rem 0.6rem;
-  background: #f1f5f9;
+  background: #172238;
   border-radius: 6px;
   border-left: 3px solid #3b82f6;
 }
 
 .optim-complete-box {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   border-radius: 12px;
   padding: 1rem;
   display: flex;
@@ -810,15 +832,15 @@ button, input, select {
    Multi-Hour Continuous Session Spanning & Hero Styles
    ======================================================== */
 .slot-cell-multispan {
-  background: #f8fafc;
+  background: #0e1628;
   border-left: 2px solid #3b82f6 !important;
   border-right: 2px solid #3b82f6 !important;
 }
 
 .class-card-lab-span {
-  background: linear-gradient(135deg, #ffffff, #f0fdf4) !important;
-  border: 1.5px solid #86efac !important;
-  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.12) !important;
+  background: linear-gradient(135deg, #172238, #0e2a22) !important;
+  border: 1.5px solid #059669 !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2) !important;
 }
 
 .class-span-timing {
@@ -827,9 +849,9 @@ button, input, select {
   gap: 0.35rem;
   font-size: 0.72rem;
   font-weight: 700;
-  color: #047857;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
   border-radius: 6px;
   padding: 0.15rem 0.5rem;
   margin-top: 0.3rem;
@@ -839,8 +861,8 @@ button, input, select {
 
 /* Empty Hero Banner when college is loaded without auto-running */
 .empty-timetable-hero {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: #111827;
+  border: 1px solid var(--border-subtle);
   border-radius: 16px;
   padding: 3.5rem 2rem;
   text-align: center;
@@ -849,7 +871,7 @@ button, input, select {
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
   margin: 1.5rem 0;
   animation: optimFadeIn 0.3s ease-out;
 }
@@ -858,8 +880,8 @@ button, input, select {
   width: 76px;
   height: 76px;
   border-radius: 50%;
-  background: #eff6ff;
-  border: 2px solid #bfdbfe;
+  background: rgba(59, 130, 246, 0.14);
+  border: 2px solid rgba(59, 130, 246, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -869,13 +891,13 @@ button, input, select {
 .empty-hero-title {
   font-size: 1.4rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #f8fafc;
   letter-spacing: -0.01em;
 }
 
 .empty-hero-desc {
   font-size: 0.95rem;
-  color: #64748b;
+  color: #94a3b8;
   max-width: 620px;
   margin: 0 auto;
   line-height: 1.6;
@@ -885,14 +907,14 @@ button, input, select {
    Schedule Timing & Daily Duration Configurator
    ======================================================== */
 .timing-config-card {
-  background: #ffffff;
+  background: #111827;
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .timing-grid-controls {
@@ -914,7 +936,7 @@ button, input, select {
   flex-direction: column;
   align-items: center;
   padding: 0.45rem 0.75rem;
-  background: #f8fafc;
+  background: #0d1424;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   font-size: 0.75rem;
@@ -925,17 +947,17 @@ button, input, select {
 
 .timing-slot-badge .badge-period-num {
   font-weight: 700;
-  color: #2563eb;
+  color: #60a5fa;
   font-size: 0.7rem;
   text-transform: uppercase;
   margin-bottom: 0.15rem;
 }
 
 .timing-slot-badge.timing-slot-lunch {
-  background: #fefce8;
-  border-color: #fde047;
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.35);
 }
 
 .timing-slot-badge.timing-slot-lunch .badge-period-num {
-  color: #854d0e;
+  color: #fbbf24;
 }

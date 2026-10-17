@@ -324,7 +324,44 @@ def export_pdf(req: ExportRequest):
     )
 
 
-# Serve frontend static assets if dist exists
+# Dedicated no-cache favicon endpoints for instant browser tab update
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
+
+
+def _serve_favicon_response():
+    for fname in ["classflow-logo.svg", "favicon.svg"]:
+        svg_path = os.path.join(frontend_dist, fname)
+        if os.path.exists(svg_path):
+            with open(svg_path, "rb") as f:
+                content = f.read()
+            return Response(
+                content=content,
+                media_type="image/svg+xml",
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+    raise HTTPException(status_code=404, detail="Favicon not found")
+
+
+@app.get("/favicon.ico")
+def get_favicon_ico():
+    return _serve_favicon_response()
+
+
+@app.get("/favicon.svg")
+def get_favicon_svg():
+    return _serve_favicon_response()
+
+
+@app.get("/classflow-logo.svg")
+def get_classflow_logo():
+    return _serve_favicon_response()
+
+
+# Serve frontend static assets if dist exists
 if os.path.exists(frontend_dist):
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+

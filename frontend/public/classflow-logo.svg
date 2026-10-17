@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="cf-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#2563eb" />
+      <stop offset="100%" stop-color="#7c3aed" />
+    </linearGradient>
+    <filter id="cf-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Modern Squircle Badge with Glowing Edge -->
+  <rect width="64" height="64" rx="16" fill="url(#cf-bg)" />
+  <rect x="2" y="2" width="60" height="60" rx="14" stroke="rgba(255,255,255,0.3)" stroke-width="2" fill="none" />
+
+  <!-- Flowing Timetable Wave Ribbons (High-Visibility contrast) -->
+  <g filter="url(#cf-glow)">
+    <!-- Upper Stream -->
+    <path d="M14 20 C 24 20, 27 15, 38 15 C 47 15, 50 20, 52 23 C 49 23, 45 20, 38 20 C 27 20, 24 25, 14 25 Z" fill="#ffffff" />
+    <!-- Center Stream -->
+    <path d="M11 32 C 23 32, 26 27, 37 27 C 47 27, 50 33, 53 37 C 50 37, 45 32, 37 32 C 25 32, 23 37, 11 37 Z" fill="#38bdf8" />
+    <!-- Lower Stream -->
+    <path d="M14 44 C 24 44, 27 39, 38 39 C 47 39, 50 44, 52 47 C 49 47, 45 44, 38 44 C 27 44, 24 49, 14 49 Z" fill="#ffffff" />
+  </g>
+
+  <!-- Synchronized Class Nodes -->
+  <circle cx="15" cy="22.5" r="4.5" fill="#ffffff" />
+  <circle cx="37" cy="29.5" r="5" fill="#38bdf8" stroke="#ffffff" stroke-width="1.8" />
+  <circle cx="51" cy="45.5" r="4.5" fill="#ffffff" />
+</svg>
