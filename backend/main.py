@@ -259,12 +259,26 @@ def swap_or_move_slot(req: SwapSlotRequest):
         raise HTTPException(status_code=404, detail=f"Slot '{req.slot_id}' not found.")
 
     analytics = compute_analytics(req.dataset, updated_schedule)
+    has_conflicts = analytics.hard_conflicts_count > 0
+
+    if has_conflicts:
+        # Strictly reject move to preserve conflict-free timetable integrity
+        return {
+            "success": False,
+            "has_conflicts": True,
+            "conflict_list": analytics.conflict_list,
+            "message": f"Move blocked: Created {analytics.hard_conflicts_count} constraint conflict(s). Timetable was not modified.",
+            "updated_schedule": req.schedule,  # Return original unchanged schedule
+            "analytics": compute_analytics(req.dataset, req.schedule),
+        }
+
     return {
         "success": True,
+        "has_conflicts": False,
+        "conflict_list": [],
+        "message": "Slot moved successfully with 0 conflicts.",
         "updated_schedule": updated_schedule,
         "analytics": analytics,
-        "has_conflicts": analytics.hard_conflicts_count > 0,
-        "conflict_list": analytics.conflict_list,
     }
 
 

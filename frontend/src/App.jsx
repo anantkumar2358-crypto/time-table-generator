@@ -640,7 +640,7 @@ export default function App() {
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success && !data.has_conflicts) {
         setSchedule(data.updated_schedule);
         setAnalytics(data.analytics);
         const newlyMoved = data.updated_schedule.find((s) => s.id === inspectSlot.id);
@@ -648,17 +648,105 @@ export default function App() {
           setInspectSlot(newlyMoved);
         }
         setMoveFeedback({
-          hasConflicts: data.has_conflicts,
-          conflicts: data.conflict_list,
-          qualityScore: data.analytics.quality_score,
+          hasConflicts: false,
+          conflicts: [],
+          qualityScore: data.analytics?.quality_score,
+          message: data.message || 'Slot moved successfully with 0 conflicts.',
+        });
+      } else {
+        // Move was rejected due to hard conflict(s)
+        if (data.updated_schedule) {
+          setSchedule(data.updated_schedule);
+        }
+        if (data.analytics) {
+          setAnalytics(data.analytics);
+        }
+        setMoveFeedback({
+          hasConflicts: true,
+          conflicts: data.conflict_list && data.conflict_list.length > 0
+            ? data.conflict_list
+            : [data.message || 'Move rejected: Slot placement causes a timetable clash.'],
+          message: data.message,
+          qualityScore: data.analytics?.quality_score,
         });
       }
     } catch (err) {
       console.error('Move error:', err);
+      setMoveFeedback({
+        hasConflicts: true,
+        conflicts: ['An error occurred while communicating with the server.'],
+      });
     } finally {
       setIsMoving(false);
     }
   };
+
+  // Live real-time pre-validation to audit conflicts before executing a move
+  const preValidationConflicts = useMemo(() => {
+    if (!inspectSlot || !dataset) return [];
+    const tDay = parseInt(moveTargetDay, 10);
+    const tStartSlot = parseInt(moveTargetSlot, 10);
+    const tRoomId = moveTargetRoom || inspectSlot.room_id;
+    const duration = inspectSlot.duration || 1;
+    const lunchIdx = dataset.time_config?.lunch_slot_idx;
+    const slotsPerDay = dataset.time_config?.slots_per_day || 8;
+    const conflicts = [];
+
+    // If target position is unchanged, no new conflict
+    if (tDay === inspectSlot.day_idx && tStartSlot === inspectSlot.slot_idx && tRoomId === inspectSlot.room_id) {
+      return [];
+    }
+
+    // 1. Boundary check
+    if (tStartSlot < 0 || tStartSlot + duration > slotsPerDay) {
+      conflicts.push(`Duration (${duration}h) extends beyond daily schedule limit (${slotsPerDay} periods).`);
+    }
+
+    // 2. Lunch check
+    if (lunchIdx !== undefined && lunchIdx !== null) {
+      if (tStartSlot <= lunchIdx && lunchIdx < tStartSlot + duration) {
+        conflicts.push(`Slot overlaps with designated Lunch Recess (${dataset.time_config.slot_times[lunchIdx] || 'Period ' + (lunchIdx + 1)}).`);
+      }
+    }
+
+    // 3. Room capacity and type checks
+    const room = dataset.rooms.find((r) => r.id === tRoomId);
+    const batch = dataset.batches.find((b) => b.id === inspectSlot.batch_id);
+    const course = dataset.courses.find((c) => c.id === inspectSlot.course_id);
+
+    if (room && batch && room.capacity < batch.size) {
+      conflicts.push(`Capacity Overflow: Room ${room.name} (${room.capacity} seats) is too small for ${batch.name} (${batch.size} students).`);
+    }
+
+    if (room && course && course.room_type_required && room.room_type !== course.room_type_required) {
+      conflicts.push(`Room Type Mismatch: ${course.name} requires ${course.room_type_required}, but ${room.name} is ${room.room_type}.`);
+    }
+
+    // 4. Overlap with other scheduled slots
+    for (const s of schedule) {
+      if (s.id === inspectSlot.id) continue;
+      if (s.day_idx !== tDay) continue;
+
+      const overlaps = tStartSlot < s.slot_idx + s.duration && s.slot_idx < tStartSlot + duration;
+      if (!overlaps) continue;
+
+      if (s.room_id === tRoomId) {
+        conflicts.push(`Room Clash: ${room ? room.name : tRoomId} is already occupied by "${s.course_name}" (${s.batch_name}) during this period.`);
+      }
+
+      if (s.batch_id === inspectSlot.batch_id) {
+        conflicts.push(`Batch Clash: ${batch ? batch.name : 'Batch'} is already scheduled for "${s.course_name}" in ${s.room_name} during this period.`);
+      }
+
+      if (s.faculty_id === inspectSlot.faculty_id) {
+        const faculty = dataset.faculty.find((f) => f.id === inspectSlot.faculty_id);
+        const facName = faculty ? faculty.name : 'Faculty';
+        conflicts.push(`Faculty Clash: ${facName} is already teaching "${s.course_name}" (${s.batch_name}) in ${s.room_name} during this period.`);
+      }
+    }
+
+    return conflicts;
+  }, [inspectSlot, dataset, schedule, moveTargetDay, moveTargetSlot, moveTargetRoom]);
 
   // High-performance O(1) cell slot lookup map replacing repetitive 40-times-per-render array filtering
   const cellSlotMap = useMemo(() => {
@@ -2048,20 +2136,44 @@ export default function App() {
                 </select>
               </div>
 
+              {/* Real-time Pre-validation Clash Indicator */}
+              {preValidationConflicts.length > 0 ? (
+                <div style={{ marginTop: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', color: '#b91c1c', fontSize: '0.8rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}>
+                    <AlertTriangle size={16} color="#dc2626" /> Cannot Move Here — Hard Conflicts Detected:
+                  </div>
+                  <ul style={{ paddingLeft: '1.2rem', marginTop: '0.35rem', marginBottom: 0 }}>
+                    {preValidationConflicts.map((c, i) => (
+                      <li key={i}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                !(parseInt(moveTargetDay, 10) === inspectSlot.day_idx && parseInt(moveTargetSlot, 10) === inspectSlot.slot_idx && (moveTargetRoom || inspectSlot.room_id) === inspectSlot.room_id) && (
+                  <div style={{ marginTop: '0.75rem', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '0.6rem 0.75rem', color: '#166534', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <CheckCircle2 size={16} color="#16a34a" />
+                    <span><b>Slot Available:</b> Zero clashes detected! Target room and time slot are fully clear.</span>
+                  </div>
+                )
+              )}
+
               {moveFeedback && (
-                <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ marginTop: '0.75rem' }}>
                   {moveFeedback.hasConflicts ? (
                     <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '0.75rem', color: '#b91c1c', fontSize: '0.8rem' }}>
-                      <b>Move Created Conflicts:</b>
-                      <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 800 }}>
+                        <AlertTriangle size={16} color="#dc2626" /> Move Blocked by Engine:
+                      </div>
+                      <ul style={{ paddingLeft: '1.2rem', marginTop: '0.3rem', marginBottom: 0 }}>
                         {moveFeedback.conflicts.map((c, i) => (
                           <li key={i}>{c}</li>
                         ))}
                       </ul>
                     </div>
                   ) : (
-                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '0.75rem', color: '#047857', fontSize: '0.8rem' }}>
-                      <b>Move Validated:</b> Slot successfully moved with 0 hard conflicts! Quality score: {moveFeedback.qualityScore}/100.
+                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', padding: '0.75rem', color: '#047857', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <CheckCircle2 size={16} color="#059669" />
+                      <span><b>Move Executed:</b> Slot relocated with 0 hard conflicts! Quality score: {moveFeedback.qualityScore}/100.</span>
                     </div>
                   )}
                 </div>
@@ -2071,8 +2183,18 @@ export default function App() {
                 <button className="btn btn-outline" onClick={() => setInspectSlot(null)}>
                   Close
                 </button>
-                <button className="btn btn-primary" onClick={handleExecuteMove} disabled={isMoving}>
-                  {isMoving ? 'Validating Move...' : 'Move & Audit Clash'}
+                <button
+                  className="btn btn-primary"
+                  onClick={handleExecuteMove}
+                  disabled={isMoving || preValidationConflicts.length > 0}
+                  style={preValidationConflicts.length > 0 ? { opacity: 0.55, cursor: 'not-allowed', background: '#94a3b8', borderColor: '#94a3b8' } : {}}
+                  title={preValidationConflicts.length > 0 ? 'Resolve conflicts before moving' : 'Execute Move'}
+                >
+                  {isMoving
+                    ? 'Validating Move...'
+                    : preValidationConflicts.length > 0
+                    ? 'Cannot Move (Conflict Detected)'
+                    : 'Move & Audit Clash'}
                 </button>
               </div>
             </div>

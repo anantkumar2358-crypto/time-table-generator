@@ -169,6 +169,40 @@ class TimetableSystemTestSuite(unittest.TestCase):
         for (b_id, day), hrs in batch_daily_hrs.items():
             self.assertLessEqual(hrs, 4, f"Batch {b_id} on day {day} scheduled for {hrs} > 4 hours cap")
 
+    def test_swap_slot_conflict_rejection(self):
+        """Test that attempting to move a slot into a clashing time/room is strictly rejected."""
+        from backend.main import swap_or_move_slot, SwapSlotRequest
+
+        result = solve_with_cp_sat(self.engineering_dataset, max_time_seconds=10)
+        self.assertEqual(result.hard_conflicts_count, 0)
+        self.assertGreater(len(result.schedule), 1)
+
+        slot_a = result.schedule[0]
+        slot_b = result.schedule[1]
+
+        # Attempt to move slot_a into slot_b's exact day, slot_idx, and room_id (creating a Room Clash)
+        swap_req = SwapSlotRequest(
+            dataset=self.engineering_dataset,
+            schedule=result.schedule,
+            slot_id=slot_a.id,
+            target_day_idx=slot_b.day_idx,
+            target_slot_idx=slot_b.slot_idx,
+            target_room_id=slot_b.room_id,
+        )
+
+        res = swap_or_move_slot(swap_req)
+
+        # The move MUST be rejected!
+        self.assertFalse(res["success"])
+        self.assertTrue(res["has_conflicts"])
+        self.assertGreater(len(res["conflict_list"]), 0)
+
+        # Schedule MUST NOT be modified with the clashing move
+        returned_schedule = res["updated_schedule"]
+        original_slot_a = next(s for s in returned_schedule if s.id == slot_a.id)
+        self.assertEqual(original_slot_a.day_idx, slot_a.day_idx)
+        self.assertEqual(original_slot_a.slot_idx, slot_a.slot_idx)
+
 
 if __name__ == "__main__":
     unittest.main()
