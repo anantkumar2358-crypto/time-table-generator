@@ -83,6 +83,10 @@ export default function App() {
   const isGeneratingRef = useRef(false);
   const lastLoadedPresetRef = useRef('');
 
+  // Per-preset timetable cache: stores { schedule, analytics, datasetHash } keyed by preset ID
+  // so switching back to an already-generated preset restores its results instantly
+  const scheduleCacheRef = useRef({});
+
   // Core API functions declared before useEffect for React Compiler optimization
   const runGenerate = useCallback(async (dsToUse, solver, currentWeights) => {
     // Concurrency guard: prevents multiple concurrent or looped runs
@@ -168,8 +172,18 @@ export default function App() {
                 isComplete: true,
               });
               if (event.result) {
-                setSchedule(event.result.schedule || []);
-                setAnalytics(event.result.analytics || null);
+                const resultSchedule = event.result.schedule || [];
+                const resultAnalytics = event.result.analytics || null;
+                setSchedule(resultSchedule);
+                setAnalytics(resultAnalytics);
+                // Cache results for the active preset so switching back is instant
+                const currentPreset = lastLoadedPresetRef.current;
+                if (currentPreset) {
+                  scheduleCacheRef.current[currentPreset] = {
+                    schedule: resultSchedule,
+                    analytics: resultAnalytics,
+                  };
+                }
               }
               // Do NOT auto-dismiss with a sudden setTimeout flicker!
               // The user can review the 100% completion card and click "View Timetable" when ready.
@@ -196,6 +210,14 @@ export default function App() {
         const data = await res.json();
         setSchedule(data.schedule || []);
         setAnalytics(data.analytics || null);
+        // Cache fallback results
+        const currentPreset = lastLoadedPresetRef.current;
+        if (currentPreset) {
+          scheduleCacheRef.current[currentPreset] = {
+            schedule: data.schedule || [],
+            analytics: data.analytics || null,
+          };
+        }
       } catch (fallbackErr) {
         console.error('Fallback generation failed:', fallbackErr);
       } finally {
@@ -212,9 +234,17 @@ export default function App() {
       const res = await fetch(`${API_BASE}/preset/${presetId}`);
       const ds = await res.json();
       setDataset(ds);
-      setSchedule([]); // Wait for user to explicitly click Generate
-      setAnalytics(null);
       setWeights(ds.weights || weightsRef.current);
+
+      // Restore cached timetable results if we already generated for this preset
+      const cached = scheduleCacheRef.current[presetId];
+      if (cached && cached.schedule.length > 0) {
+        setSchedule(cached.schedule);
+        setAnalytics(cached.analytics);
+      } else {
+        setSchedule([]); // Wait for user to explicitly click Generate
+        setAnalytics(null);
+      }
 
       if (ds.batches && ds.batches.length > 0) {
         setSelectedBatchId(ds.batches[0].id);
@@ -245,9 +275,54 @@ export default function App() {
     fetchPresets();
   }, [fetchPresets]);
 
-  // When selectedPresetId changes, load dataset ONLY (never auto-generate on open)
+  // When selectedPresetId changes, load dataset (restore cached results if any, or show empty hero)
   useEffect(() => {
-    if (!selectedPresetId || selectedPresetId === 'custom') return;
+    if (!selectedPresetId) return;
+
+    // "Custom Configured College" → blank empty dataset for user to build from scratch
+    if (selectedPresetId === 'custom') {
+      if (lastLoadedPresetRef.current === 'custom') return;
+      lastLoadedPresetRef.current = 'custom';
+      setDataset({
+        name: 'My Custom College',
+        academic_term: 'Semester 2026',
+        time_config: {
+          days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+          slots_per_day: 8,
+          slot_times: [
+            '09:00 - 10:00',
+            '10:00 - 11:00',
+            '11:15 - 12:15',
+            '12:15 - 13:15 (Lunch)',
+            '13:15 - 14:15',
+            '14:15 - 15:15',
+            '15:15 - 16:15',
+            '16:15 - 17:15',
+          ],
+          lunch_slot_idx: 3,
+          break_slot_indices: [],
+        },
+        rooms: [],
+        faculty: [],
+        batches: [],
+        courses: [],
+        weights: {
+          weight_idle_student: 2.0,
+          weight_idle_faculty: 1.5,
+          weight_workload_balance: 1.2,
+          weight_room_utilization: 1.0,
+          weight_faculty_preference: 1.5,
+        },
+      });
+      setSchedule([]);
+      setAnalytics(null);
+      setSelectedBatchId('');
+      setSelectedFacultyId('');
+      setSelectedRoomId('');
+      setActiveTab('dataset'); // Jump to editor so user can add data
+      return;
+    }
+
     if (lastLoadedPresetRef.current === selectedPresetId) return;
     lastLoadedPresetRef.current = selectedPresetId;
 
@@ -281,10 +356,12 @@ export default function App() {
         }
         setDataset(importedData);
         setSelectedPresetId('custom');
+        lastLoadedPresetRef.current = 'custom';
+        setSchedule([]);
+        setAnalytics(null);
         if (importedData.batches.length > 0) setSelectedBatchId(importedData.batches[0].id);
         if (importedData.faculty.length > 0) setSelectedFacultyId(importedData.faculty[0].id);
         if (importedData.rooms.length > 0) setSelectedRoomId(importedData.rooms[0].id);
-        await runGenerate(importedData, solverType, importedData.weights || weights);
       } catch (err) {
         alert('Failed to parse JSON file: ' + err.message);
       }
@@ -294,6 +371,16 @@ export default function App() {
   };
 
   // Add / Delete Entities
+  // When the dataset is modified, invalidate cached results so user must re-generate
+  const invalidateCurrentCache = () => {
+    const presetId = lastLoadedPresetRef.current;
+    if (presetId && scheduleCacheRef.current[presetId]) {
+      delete scheduleCacheRef.current[presetId];
+    }
+    setSchedule([]);
+    setAnalytics(null);
+  };
+
   const handleAddRoom = () => {
     if (!newRoom.name) return;
     const newId = `room_${Date.now()}`;
@@ -308,6 +395,7 @@ export default function App() {
     };
     const updated = { ...dataset, rooms: [...dataset.rooms, roomObj] };
     setDataset(updated);
+    invalidateCurrentCache();
     setShowAddRoomModal(false);
     setNewRoom({ name: '', room_type: 'CLASSROOM', capacity: 60, building: 'Academic Block' });
   };
@@ -315,6 +403,7 @@ export default function App() {
   const handleDeleteRoom = (roomId) => {
     const updated = { ...dataset, rooms: dataset.rooms.filter((r) => r.id !== roomId) };
     setDataset(updated);
+    invalidateCurrentCache();
   };
 
   const handleAddFaculty = () => {
@@ -334,6 +423,7 @@ export default function App() {
     };
     const updated = { ...dataset, faculty: [...dataset.faculty, facObj] };
     setDataset(updated);
+    invalidateCurrentCache();
     setShowAddFacultyModal(false);
     setNewFaculty({ name: '', department: 'Computer Science', designation: 'Assistant Professor', max_daily_hours: 4 });
   };
@@ -341,6 +431,7 @@ export default function App() {
   const handleDeleteFaculty = (facId) => {
     const updated = { ...dataset, faculty: dataset.faculty.filter((f) => f.id !== facId) };
     setDataset(updated);
+    invalidateCurrentCache();
   };
 
   const handleAddCourse = () => {
@@ -362,6 +453,7 @@ export default function App() {
     };
     const updated = { ...dataset, courses: [...dataset.courses, courseObj] };
     setDataset(updated);
+    invalidateCurrentCache();
     setShowAddCourseModal(false);
     setNewCourse({ code: '', name: '', department: 'Computer Science', course_type: 'THEORY', weekly_hours: 3, consecutive_slots: 1, room_type_required: 'CLASSROOM', batch_id: '', faculty_id: '' });
   };
@@ -369,6 +461,7 @@ export default function App() {
   const handleDeleteCourse = (courseId) => {
     const updated = { ...dataset, courses: dataset.courses.filter((c) => c.id !== courseId) };
     setDataset(updated);
+    invalidateCurrentCache();
   };
 
   // Export handlers

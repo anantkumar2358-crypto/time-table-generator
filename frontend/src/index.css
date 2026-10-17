@@ -356,6 +356,7 @@ button, input, select {
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
+  table-layout: fixed;
 }
 
 .schedule-grid-table th {
@@ -385,6 +386,7 @@ button, input, select {
   border: 1px solid var(--border-subtle);
   vertical-align: middle;
   text-align: left;
+  width: 110px;
 }
 
 .slot-cell {
@@ -392,7 +394,6 @@ button, input, select {
   padding: 0.45rem;
   vertical-align: top;
   min-height: 85px;
-  width: calc((100% - 110px) / 8);
   background: #ffffff;
   transition: background 0.15s;
 }
