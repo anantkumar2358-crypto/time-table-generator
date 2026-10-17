@@ -31,6 +31,7 @@ def get_engineering_preset() -> TimetableDataset:
         ],
         lunch_slot_idx=3,
         break_slot_indices=[],
+        max_daily_lecture_hours=6,
     )
 
     rooms = [
@@ -422,6 +423,7 @@ def get_business_school_preset() -> TimetableDataset:
         ],
         lunch_slot_idx=3,
         break_slot_indices=[],
+        max_daily_lecture_hours=5,
     )
 
     rooms = [

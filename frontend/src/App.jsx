@@ -25,6 +25,26 @@ import {
 
 const API_BASE = '/api';
 
+function generateSlotTimes(slotsCount, lunchIdx, startHour = 9, startMinute = 0) {
+  const times = [];
+  let currentHour = startHour;
+  let currentMin = startMinute;
+
+  for (let i = 0; i < slotsCount; i++) {
+    const isLunch = i === lunchIdx;
+    const startStr = `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`;
+
+    let endHour = currentHour + 1;
+    let endMin = currentMin;
+    const endStr = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+
+    times.push(isLunch ? `${startStr} - ${endStr} (Lunch)` : `${startStr} - ${endStr}`);
+    currentHour = endHour;
+    currentMin = endMin;
+  }
+  return times;
+}
+
 export default function App() {
   const [presets, setPresets] = useState([]);
   const [selectedPresetId, setSelectedPresetId] = useState('engineering');
@@ -59,7 +79,7 @@ export default function App() {
 
   // Add Entity Modals
   const [showAddBatchModal, setShowAddBatchModal] = useState(false);
-  const [newBatch, setNewBatch] = useState({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '' });
+  const [newBatch, setNewBatch] = useState({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '', max_daily_hours: '' });
 
   const [showAddRoomModal, setShowAddRoomModal] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', room_type: 'CLASSROOM', capacity: 60, building: 'Academic Block' });
@@ -310,6 +330,7 @@ export default function App() {
           ],
           lunch_slot_idx: 3,
           break_slot_indices: [],
+          max_daily_lecture_hours: 6,
         },
         rooms: [],
         faculty: [],
@@ -379,6 +400,29 @@ export default function App() {
     e.target.value = '';
   };
 
+  // Schedule Timing & Daily Duration Configurator Handler
+  const handleUpdateScheduleTiming = (newSlotsCount, newMaxDailyHrs, newLunchIdx) => {
+    if (!dataset) return;
+    const slots = parseInt(newSlotsCount, 10);
+    const lunch = newLunchIdx !== undefined && newLunchIdx !== null && newLunchIdx !== '' ? parseInt(newLunchIdx, 10) : 3;
+    const maxDaily = newMaxDailyHrs === '' || newMaxDailyHrs === null || newMaxDailyHrs === undefined ? null : parseInt(newMaxDailyHrs, 10);
+
+    const newSlotTimes = generateSlotTimes(slots, lunch);
+
+    const updated = {
+      ...dataset,
+      time_config: {
+        ...dataset.time_config,
+        slots_per_day: slots,
+        lunch_slot_idx: lunch,
+        slot_times: newSlotTimes,
+        max_daily_lecture_hours: maxDaily,
+      },
+    };
+    setDataset(updated);
+    invalidateCurrentCache();
+  };
+
   // Add / Delete Entities
   // When the dataset is modified, invalidate cached results so user must re-generate
   const invalidateCurrentCache = () => {
@@ -400,13 +444,14 @@ export default function App() {
       semester: parseInt(newBatch.semester, 10) || 1,
       size: parseInt(newBatch.size, 10) || 50,
       preferred_room_id: newBatch.preferred_room_id || '',
+      max_daily_hours: newBatch.max_daily_hours ? parseInt(newBatch.max_daily_hours, 10) : null,
     };
     const updated = { ...dataset, batches: [...dataset.batches, batchObj] };
     setDataset(updated);
     if (!selectedBatchId) setSelectedBatchId(newId);
     invalidateCurrentCache();
     setShowAddBatchModal(false);
-    setNewBatch({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '' });
+    setNewBatch({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '', max_daily_hours: '' });
   };
 
   const handleDeleteBatch = (batchId) => {
@@ -1219,6 +1264,103 @@ export default function App() {
               </div>
             </div>
 
+            {/* Daily Schedule Timing & Lecture Duration Configuration Card */}
+            <div className="timing-config-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <h4 style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Clock size={18} color="#2563eb" /> Daily Schedule & Lecture Duration Configuration
+                  </h4>
+                  <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                    Configure total periods per day (e.g. 6-hour vs 8-hour day) and maximum daily lecture limits per student batch.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="pill pill-success" style={{ fontSize: '0.75rem' }}>
+                    {dataset.time_config.slots_per_day} Periods / Day
+                  </span>
+                  <span className="pill" style={{ background: '#ede9fe', color: '#6d28d9', fontSize: '0.75rem' }}>
+                    {dataset.time_config.max_daily_lecture_hours ? `Max ${dataset.time_config.max_daily_lecture_hours}h Lectures / Day` : 'No Daily Cap'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="timing-grid-controls">
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Total Daily Periods / Slots
+                  </label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%' }}
+                    value={dataset.time_config.slots_per_day}
+                    onChange={(e) => handleUpdateScheduleTiming(e.target.value, dataset.time_config.max_daily_lecture_hours, dataset.time_config.lunch_slot_idx)}
+                  >
+                    <option value={6}>6 Periods / Day (Compact Schedule - 5h Classes + Lunch)</option>
+                    <option value={7}>7 Periods / Day (Moderate Schedule - 6h Classes + Lunch)</option>
+                    <option value={8}>8 Periods / Day (Standard Schedule - 7h Classes + Lunch)</option>
+                    <option value={9}>9 Periods / Day (Extended Schedule - 8h Classes + Lunch)</option>
+                    <option value={10}>10 Periods / Day (Full Day Operations)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Max Daily Lectures Cap (Per Batch)
+                  </label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%' }}
+                    value={dataset.time_config.max_daily_lecture_hours || ''}
+                    onChange={(e) => handleUpdateScheduleTiming(dataset.time_config.slots_per_day, e.target.value, dataset.time_config.lunch_slot_idx)}
+                  >
+                    <option value={4}>4 Hours Max Lectures / Day (Light Schedule)</option>
+                    <option value={5}>5 Hours Max Lectures / Day (Moderate Load)</option>
+                    <option value={6}>6 Hours Max Lectures / Day (Recommended Standard)</option>
+                    <option value={7}>7 Hours Max Lectures / Day (Intensive Load)</option>
+                    <option value={8}>8 Hours Max Lectures / Day (Full Day Load)</option>
+                    <option value="">No Daily Cap (Fill Any Available Period)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                    Lunch Recess Placement
+                  </label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%' }}
+                    value={dataset.time_config.lunch_slot_idx ?? 3}
+                    onChange={(e) => handleUpdateScheduleTiming(dataset.time_config.slots_per_day, dataset.time_config.max_daily_lecture_hours, e.target.value)}
+                  >
+                    <option value={2}>After Period 2 (Slot 3)</option>
+                    <option value={3}>After Period 3 (Slot 4 - Standard 3 Hours Before Lunch)</option>
+                    <option value={4}>After Period 4 (Slot 5)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Slot Timings Strip Preview */}
+              <div>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.3rem' }}>
+                  Daily Period Schedule Preview ({dataset.time_config.slots_per_day} slots total):
+                </div>
+                <div className="timing-slots-strip">
+                  {dataset.time_config.slot_times.map((slotTime, idx) => {
+                    const isLunch = idx === dataset.time_config.lunch_slot_idx;
+                    return (
+                      <div key={idx} className={`timing-slot-badge ${isLunch ? 'timing-slot-lunch' : ''}`}>
+                        <span className="badge-period-num">
+                          {isLunch ? 'Lunch Recess' : `Period ${idx < (dataset.time_config.lunch_slot_idx ?? 99) ? idx + 1 : idx}`}
+                        </span>
+                        <span>{slotTime}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             <div className="analytics-grid">
               {/* Student Batches Card */}
               <div className="analytics-card">
@@ -1441,6 +1583,22 @@ export default function App() {
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Max Daily Lecture Hours (Optional Batch Cap)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={dataset.time_config.slots_per_day}
+                  placeholder={`Default (${dataset.time_config.max_daily_lecture_hours || dataset.time_config.slots_per_day}h/day from College Settings)`}
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newBatch.max_daily_hours || ''}
+                  onChange={(e) => setNewBatch({ ...newBatch, max_daily_hours: e.target.value })}
+                />
+                <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>
+                  Limits maximum classes this batch can attend per day. Leave blank to use college default.
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
@@ -1762,6 +1920,44 @@ export default function App() {
                   value={weights.weight_faculty_preference}
                   onChange={(e) => setWeights({ ...weights, weight_faculty_preference: parseFloat(e.target.value) })}
                 />
+              </div>
+
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e3a8a', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Clock size={16} /> Daily Lecture Duration & Periods Configuration
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Daily Slots / Periods</label>
+                    <select
+                      className="select-control"
+                      style={{ width: '100%', marginTop: '0.25rem' }}
+                      value={dataset.time_config.slots_per_day}
+                      onChange={(e) => handleUpdateScheduleTiming(e.target.value, dataset.time_config.max_daily_lecture_hours, dataset.time_config.lunch_slot_idx)}
+                    >
+                      <option value={6}>6 Periods / Day (Compact)</option>
+                      <option value={7}>7 Periods / Day (Moderate)</option>
+                      <option value={8}>8 Periods / Day (Standard)</option>
+                      <option value={9}>9 Periods / Day (Extended)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Max Student Lectures / Day</label>
+                    <select
+                      className="select-control"
+                      style={{ width: '100%', marginTop: '0.25rem' }}
+                      value={dataset.time_config.max_daily_lecture_hours || ''}
+                      onChange={(e) => handleUpdateScheduleTiming(dataset.time_config.slots_per_day, e.target.value, dataset.time_config.lunch_slot_idx)}
+                    >
+                      <option value={4}>4 Hours Max</option>
+                      <option value={5}>5 Hours Max</option>
+                      <option value={6}>6 Hours Max (Standard)</option>
+                      <option value={7}>7 Hours Max</option>
+                      <option value={8}>8 Hours Max</option>
+                      <option value="">No Cap</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>

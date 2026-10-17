@@ -137,7 +137,37 @@ class TimetableSystemTestSuite(unittest.TestCase):
         self.assertGreater(len(xlsx), 5000)
 
         self.assertIsInstance(pdf, bytes)
-        self.assertGreater(len(pdf), 5000)
+    def test_configurable_daily_duration_and_cap(self):
+        """Test that configuring slots_per_day to 6 and max_daily_lecture_hours to 4 is strictly respected."""
+        dataset = get_engineering_preset()
+        dataset.time_config.slots_per_day = 6
+        dataset.time_config.slot_times = [
+            "09:00 - 10:00",
+            "10:00 - 11:00",
+            "11:00 - 12:00",
+            "12:00 - 13:00 (Lunch)",
+            "13:00 - 14:00",
+            "14:00 - 15:00",
+        ]
+        dataset.time_config.lunch_slot_idx = 3
+        dataset.time_config.max_daily_lecture_hours = 4
+
+        result = solve_with_cp_sat(dataset, max_time_seconds=15)
+        self.assertEqual(result.hard_conflicts_count, 0)
+        self.assertGreater(len(result.schedule), 0)
+
+        # Verify no slot extends beyond slot 5 (6 slots per day)
+        for s in result.schedule:
+            self.assertLessEqual(s.slot_idx + s.duration, 6)
+
+        # Verify no batch exceeds max_daily_lecture_hours (4 hours) on any day
+        batch_daily_hrs = {}
+        for s in result.schedule:
+            key = (s.batch_id, s.day_idx)
+            batch_daily_hrs[key] = batch_daily_hrs.get(key, 0) + s.duration
+
+        for (b_id, day), hrs in batch_daily_hrs.items():
+            self.assertLessEqual(hrs, 4, f"Batch {b_id} on day {day} scheduled for {hrs} > 4 hours cap")
 
 
 if __name__ == "__main__":

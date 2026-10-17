@@ -880,3 +880,62 @@ button, input, select {
   margin: 0 auto;
   line-height: 1.6;
 }
+
+/* ========================================================
+   Schedule Timing & Daily Duration Configurator
+   ======================================================== */
+.timing-config-card {
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.timing-grid-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.timing-slots-strip {
+  display: flex;
+  gap: 0.45rem;
+  overflow-x: auto;
+  padding: 0.4rem 0.2rem;
+  flex-wrap: wrap;
+}
+
+.timing-slot-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  min-width: 105px;
+  text-align: center;
+}
+
+.timing-slot-badge .badge-period-num {
+  font-weight: 700;
+  color: #2563eb;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  margin-bottom: 0.15rem;
+}
+
+.timing-slot-badge.timing-slot-lunch {
+  background: #fefce8;
+  border-color: #fde047;
+}
+
+.timing-slot-badge.timing-slot-lunch .badge-period-num {
+  color: #854d0e;
+}

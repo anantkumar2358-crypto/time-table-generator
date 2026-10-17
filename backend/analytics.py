@@ -41,9 +41,10 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
     batch_period_map = defaultdict(list)
     room_period_map = defaultdict(list)
 
-    # Track hours scheduled per (course_id, batch_id) and faculty daily load
+    # Track hours scheduled per (course_id, batch_id), faculty daily load, and batch daily load
     course_batch_hours = defaultdict(int)
     faculty_daily_hours = defaultdict(lambda: defaultdict(int))
+    batch_daily_hours = defaultdict(lambda: defaultdict(int))
 
     for slot in schedule:
         # Check boundary
@@ -56,6 +57,7 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
 
         course_batch_hours[(slot.course_id, slot.batch_id)] += slot.duration
         faculty_daily_hours[slot.faculty_id][slot.day_idx] += slot.duration
+        batch_daily_hours[slot.batch_id][slot.day_idx] += slot.duration
 
         # Period-level checks
         fac_unavail = fac_unavail_sets.get(slot.faculty_id, set())
@@ -157,6 +159,22 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
                         f"{day_name}, exceeding maximum permitted {fac.max_daily_hours} hours/day."
                     )
                     hard_conflicts += (hrs - fac.max_daily_hours)
+
+    # Check 6: Student batch max daily lecture hours
+    max_batch_global = getattr(dataset.time_config, "max_daily_lecture_hours", None)
+    for b_id, daily_map in batch_daily_hours.items():
+        batch = batches_by_id.get(b_id)
+        max_b_hrs = (batch.max_daily_hours if batch and batch.max_daily_hours else None) or max_batch_global
+        if max_b_hrs:
+            for day, hrs in daily_map.items():
+                if hrs > max_b_hrs:
+                    day_name = dataset.time_config.days[day] if day < len(dataset.time_config.days) else f"Day {day}"
+                    b_name = batch.name if batch else b_id
+                    conflicts.append(
+                        f"[BATCH WORKLOAD OVERLOAD] Batch '{b_name}' is scheduled for {hrs} lecture hours on "
+                        f"{day_name}, exceeding maximum permitted {max_b_hrs} hours/day."
+                    )
+                    hard_conflicts += (hrs - max_b_hrs)
 
     return conflicts, hard_conflicts
 

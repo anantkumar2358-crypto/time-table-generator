@@ -193,6 +193,16 @@ def solve_with_cp_sat(
         if fac and var_dur_list:
             model.Add(sum(var * dur for var, dur in var_dur_list) <= fac.max_daily_hours)
 
+    # Constraint 5b: Student batch max daily lecture hours
+    max_batch_global = getattr(time_config, "max_daily_lecture_hours", None)
+    for batch in dataset.batches:
+        max_batch_hrs = getattr(batch, "max_daily_hours", None) or max_batch_global
+        if max_batch_hrs and max_batch_hrs < slots_per_day:
+            for day in range(days_count):
+                vars_for_day = [v for p in range(slots_per_day) for v in batch_period_vars.get((batch.id, day, p), [])]
+                if vars_for_day:
+                    model.Add(sum(vars_for_day) <= max_batch_hrs)
+
     # Constraint 6: Spread course lectures across days for a batch
     for (course_id, batch_id, day), var_list in course_batch_day_vars.items():
         course = courses_by_id[course_id]
@@ -219,7 +229,8 @@ def solve_with_cp_sat(
 
     # Objective C: Workload Uniformity across Days
     balance_weight = int(weights.weight_workload_balance * 8)
-    ideal_daily_hours = 4
+    usable_slots = slots_per_day - (1 if lunch_idx is not None else 0)
+    ideal_daily_hours = min(4, max_batch_global or usable_slots)
     for batch in dataset.batches:
         for day in range(days_count):
             vars_for_day = [v for p in range(slots_per_day) for v in batch_period_vars.get((batch.id, day, p), [])]

@@ -28,14 +28,15 @@ class TimeConfig(BaseModel):
         "09:00 - 10:00",
         "10:00 - 11:00",
         "11:15 - 12:15",
-        "12:15 - 13:15",
-        "13:15 - 14:00 (Lunch)",
-        "14:00 - 15:00",
-        "15:00 - 16:00",
-        "16:00 - 17:00"
+        "12:15 - 13:15 (Lunch)",
+        "13:15 - 14:15",
+        "14:15 - 15:15",
+        "15:15 - 16:15",
+        "16:15 - 17:15"
     ]
-    lunch_slot_idx: Optional[int] = 4  # 0-indexed, slot 4 is lunch
+    lunch_slot_idx: Optional[int] = 3  # 0-indexed, slot 3 is lunch (exactly 3h before lunch)
     break_slot_indices: List[int] = []
+    max_daily_lecture_hours: Optional[int] = 6  # Maximum lecture/lab hours a batch can have per day
 
 
 class Room(BaseModel):
@@ -70,6 +71,7 @@ class StudentBatch(BaseModel):
     semester: int = 1
     size: int = 50
     preferred_room_id: Optional[str] = None
+    max_daily_hours: Optional[int] = None  # Specific override per batch, or falls back to time_config.max_daily_lecture_hours
 
 
 class Course(BaseModel):
