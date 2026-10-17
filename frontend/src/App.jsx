@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Calendar,
   Clock,
   Sparkles,
-  Download,
   FileSpreadsheet,
   FileText,
   Users,
@@ -13,15 +12,11 @@ import {
   AlertTriangle,
   Sliders,
   RefreshCw,
-  Info,
   BookOpen,
-  ArrowRight,
   ShieldCheck,
-  Zap,
   BarChart3,
   X,
   Layers,
-  Search,
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -58,29 +53,40 @@ export default function App() {
   const [moveFeedback, setMoveFeedback] = useState(null);
   const [isMoving, setIsMoving] = useState(false);
 
-  // Load presets on mount
-  useEffect(() => {
-    fetchPresets();
-  }, []);
-
-  // When selectedPresetId changes, load dataset and generate
-  useEffect(() => {
-    if (selectedPresetId) {
-      loadPresetAndGenerate(selectedPresetId);
-    }
-  }, [selectedPresetId]);
-
-  const fetchPresets = async () => {
+  // Core API functions declared before useEffect for React Compiler optimization
+  const runGenerate = useCallback(async (dsToUse = dataset, solver = solverType, currentWeights = weights) => {
+    if (!dsToUse) return;
+    setIsGenerating(true);
+    setMoveFeedback(null);
     try {
-      const res = await fetch(`${API_BASE}/presets`);
-      const data = await res.json();
-      setPresets(data);
-    } catch (err) {
-      console.error('Error fetching presets:', err);
-    }
-  };
+      const payload = {
+        dataset: {
+          ...dsToUse,
+          weights: currentWeights,
+        },
+        solver_type: solver,
+        max_time_seconds: 25,
+        ga_population_size: 60,
+        ga_generations: 150,
+      };
 
-  const loadPresetAndGenerate = async (presetId) => {
+      const res = await fetch(`${API_BASE}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      setSchedule(data.schedule || []);
+      setAnalytics(data.analytics || null);
+    } catch (err) {
+      console.error('Generation error:', err);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [dataset, solverType, weights]);
+
+  const loadPresetAndGenerate = useCallback(async (presetId) => {
     setIsGenerating(true);
     try {
       const res = await fetch(`${API_BASE}/preset/${presetId}`);
@@ -98,45 +104,34 @@ export default function App() {
         setSelectedRoomId(ds.rooms[0].id);
       }
 
-      // Generate initial schedule
       await runGenerate(ds, solverType, ds.weights);
     } catch (err) {
       console.error('Error loading preset:', err);
       setIsGenerating(false);
     }
-  };
+  }, [solverType, weights, runGenerate]);
 
-  const runGenerate = async (dsToUse = dataset, solver = solverType, currentWeights = weights) => {
-    if (!dsToUse) return;
-    setIsGenerating(true);
-    setMoveFeedback(null);
+  const fetchPresets = useCallback(async () => {
     try {
-      const payload = {
-        dataset: {
-          ...dsToUse,
-          weights: currentWeights,
-        },
-        solver_type: solver,
-        max_time_seconds: 25,
-        ga_population_size: 70,
-        ga_generations: 160,
-      };
-
-      const res = await fetch(`${API_BASE}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
+      const res = await fetch(`${API_BASE}/presets`);
       const data = await res.json();
-      setSchedule(data.schedule || []);
-      setAnalytics(data.analytics || null);
+      setPresets(data);
     } catch (err) {
-      console.error('Generation error:', err);
-    } finally {
-      setIsGenerating(false);
+      console.error('Error fetching presets:', err);
     }
-  };
+  }, []);
+
+  // Load presets on mount
+  useEffect(() => {
+    fetchPresets();
+  }, [fetchPresets]);
+
+  // When selectedPresetId changes, load dataset and generate
+  useEffect(() => {
+    if (selectedPresetId) {
+      loadPresetAndGenerate(selectedPresetId);
+    }
+  }, [selectedPresetId, loadPresetAndGenerate]);
 
   // Export handlers
   const handleExportExcel = async () => {
@@ -224,6 +219,10 @@ export default function App() {
       if (data.success) {
         setSchedule(data.updated_schedule);
         setAnalytics(data.analytics);
+        const newlyMoved = data.updated_schedule.find((s) => s.id === inspectSlot.id);
+        if (newlyMoved) {
+          setInspectSlot(newlyMoved);
+        }
         setMoveFeedback({
           hasConflicts: data.has_conflicts,
           conflicts: data.conflict_list,
@@ -237,6 +236,25 @@ export default function App() {
     }
   };
 
+  // High-performance O(1) cell slot lookup map replacing repetitive 40-times-per-render array filtering
+  const cellSlotMap = useMemo(() => {
+    const map = {};
+    for (const s of schedule) {
+      const isTarget =
+        (activeTab === 'batch' && s.batch_id === selectedBatchId) ||
+        (activeTab === 'faculty' && s.faculty_id === selectedFacultyId) ||
+        (activeTab === 'room' && s.room_id === selectedRoomId);
+      if (!isTarget) continue;
+
+      for (let p = s.slot_idx; p < s.slot_idx + s.duration; p++) {
+        const key = `${s.day_idx}_${p}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(s);
+      }
+    }
+    return map;
+  }, [schedule, activeTab, selectedBatchId, selectedFacultyId, selectedRoomId]);
+
   if (!dataset) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '0.75rem' }}>
@@ -249,36 +267,6 @@ export default function App() {
   const days = dataset.time_config.days;
   const slotTimes = dataset.time_config.slot_times;
   const lunchIdx = dataset.time_config.lunch_slot_idx;
-
-  // Grid indexing based on activeTab
-  const getCellSlots = (dayIdx, periodIdx) => {
-    if (activeTab === 'batch') {
-      return schedule.filter(
-        (s) =>
-          s.batch_id === selectedBatchId &&
-          s.day_idx === dayIdx &&
-          periodIdx >= s.slot_idx &&
-          periodIdx < s.slot_idx + s.duration
-      );
-    } else if (activeTab === 'faculty') {
-      return schedule.filter(
-        (s) =>
-          s.faculty_id === selectedFacultyId &&
-          s.day_idx === dayIdx &&
-          periodIdx >= s.slot_idx &&
-          periodIdx < s.slot_idx + s.duration
-      );
-    } else if (activeTab === 'room') {
-      return schedule.filter(
-        (s) =>
-          s.room_id === selectedRoomId &&
-          s.day_idx === dayIdx &&
-          periodIdx >= s.slot_idx &&
-          periodIdx < s.slot_idx + s.duration
-      );
-    }
-    return [];
-  };
 
   const currentBatch = dataset.batches.find((b) => b.id === selectedBatchId);
   const currentFaculty = dataset.faculty.find((f) => f.id === selectedFacultyId);
@@ -559,7 +547,7 @@ export default function App() {
                           );
                         }
 
-                        const cellSlots = getCellSlots(dayIdx, periodIdx);
+                        const cellSlots = cellSlotMap[`${dayIdx}_${periodIdx}`] || [];
 
                         if (cellSlots.length === 0) {
                           return (

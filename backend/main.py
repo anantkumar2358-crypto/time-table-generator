@@ -107,7 +107,6 @@ def generate_timetable(req: GenerationRequest):
                 weights=req.dataset.weights,
             )
         else:
-            # Default to CP-SAT
             result = solve_with_cp_sat(
                 dataset=req.dataset,
                 max_time_seconds=req.max_time_seconds,
@@ -128,17 +127,25 @@ def validate_timetable(req: ExportRequest):
 def swap_or_move_slot(req: SwapSlotRequest):
     """
     Simulates or executes moving a slot to a new day and period,
-    and returns the updated schedule along with live conflict audit.
+    with boundary validation and live conflict audit.
     """
+    days = req.dataset.time_config.days
+    slot_times = req.dataset.time_config.slot_times
+
+    # Boundary check to prevent IndexError
+    if req.target_day_idx < 0 or req.target_day_idx >= len(days):
+        raise HTTPException(status_code=400, detail=f"Target day index {req.target_day_idx} is out of bounds (0..{len(days)-1}).")
+
+    if req.target_slot_idx < 0 or req.target_slot_idx >= len(slot_times):
+        raise HTTPException(status_code=400, detail=f"Target slot index {req.target_slot_idx} is out of bounds (0..{len(slot_times)-1}).")
+
     target_slot = None
     updated_schedule = []
 
     for s in req.schedule:
         if s.id == req.slot_id:
             target_slot = s
-            # Create moved copy
-            day_name = req.dataset.time_config.days[req.target_day_idx]
-            slot_times = req.dataset.time_config.slot_times
+            day_name = days[req.target_day_idx]
             dur = s.duration
             end_p = req.target_slot_idx + dur - 1
             time_str = (

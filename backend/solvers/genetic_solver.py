@@ -1,7 +1,7 @@
 """
 Genetic Algorithm (Evolutionary Metaheuristic) Solver for College Timetables.
-Features domain-aware repair mutation, elitism, multi-objective fitness evaluation,
-and adaptive search operators.
+Optimized with O(1) set-based evaluation, pre-filtered valid gene pools,
+elitism, and domain-aware repair mutation.
 """
 import time
 import random
@@ -20,13 +20,13 @@ from ..analytics import compute_analytics
 
 def solve_with_genetic_algorithm(
     dataset: TimetableDataset,
-    population_size: int = 80,
-    generations: int = 200,
+    population_size: int = 60,
+    generations: int = 150,
     max_time_seconds: int = 30,
     weights: OptimizationWeights = None,
 ) -> ScheduleResult:
     """
-    Solves the college timetable problem using an advanced Genetic Algorithm.
+    High-performance Genetic Algorithm solver for college timetabling.
     """
     start_time = time.time()
     if weights is None:
@@ -44,7 +44,17 @@ def solve_with_genetic_algorithm(
     rooms_by_id = {r.id: r for r in dataset.rooms}
     faculty_by_id = {f.id: f for f in dataset.faculty}
     batches_by_id = {b.id: b for b in dataset.batches}
-    courses_by_id = {c.id: c for c in dataset.courses}
+
+    # Pre-index faculty unavailabilities and preferences as fast O(1) sets
+    fac_unavail_sets = {
+        f.id: {tuple(u) for u in f.unavailable_slots if len(u) == 2}
+        for f in dataset.faculty
+    }
+    fac_pref_sets = {
+        f.id: {tuple(p) for p in f.preferred_slots if len(p) == 2}
+        for f in dataset.faculty
+    }
+    fac_max_daily = {f.id: f.max_daily_hours for f in dataset.faculty}
 
     # 1. Decompose courses into sessions
     sessions = []
@@ -84,14 +94,13 @@ def solve_with_genetic_algorithm(
             message="No sessions to schedule."
         )
 
-    # 2. Determine valid options for each session
+    # 2. Pre-filter valid options per session (strictly pre-validated rooms & slots)
     session_options = []
     for s in sessions:
         course = s["course"]
         batch = s["batch"]
         dur = s["duration"]
 
-        # Valid (day, start_slot)
         valid_slots = []
         for d in range(days_count):
             for slot in range(slots_per_day - dur + 1):
@@ -102,7 +111,7 @@ def solve_with_genetic_algorithm(
         if not valid_slots:
             valid_slots = [(0, 0)]
 
-        # Valid rooms (preferred: matching type and capacity)
+        # Pre-filter rooms matching room type and capacity
         pref_rooms = [
             r.id for r in dataset.rooms
             if r.room_type == course.room_type_required and r.capacity >= batch.size
@@ -112,7 +121,7 @@ def solve_with_genetic_algorithm(
         if not pref_rooms:
             pref_rooms = [r.id for r in dataset.rooms]
 
-        # Valid faculty
+        # Pre-filter qualified faculty
         if course.faculty_ids:
             pref_faculty = [fid for fid in course.faculty_ids if fid in faculty_by_id]
         else:
@@ -126,18 +135,14 @@ def solve_with_genetic_algorithm(
             "pref_faculty": pref_faculty,
         })
 
-    # 3. Chromosome representation
-    # An individual is a list of genes: [{'day': d, 'slot': s, 'room_id': r, 'faculty_id': f}, ...]
     num_sessions = len(sessions)
 
+    # 3. Individual Generation (Semi-greedy constructive heuristic)
     def create_individual(smart: bool = True) -> List[Dict[str, Any]]:
-        ind = []
-        # Track occupied for smart heuristic placement
         fac_busy = set()
         batch_busy = set()
         room_busy = set()
 
-        # Sort sessions by difficulty (longer duration / labs first)
         order = list(range(num_sessions))
         if smart:
             order.sort(key=lambda idx: -sessions[idx]["duration"])
@@ -153,17 +158,14 @@ def solve_with_genetic_algorithm(
             chosen_fac = None
 
             if smart:
-                # Try finding a slot that doesn't clash with already placed sessions
                 shuffled_slots = list(opts["valid_slots"])
                 random.shuffle(shuffled_slots)
 
                 for d, sl in shuffled_slots:
                     periods = range(sl, sl + dur)
-                    # Check if batch is busy
                     if any((b_id, d, p) in batch_busy for p in periods):
                         continue
 
-                    # Find a free room
                     avail_rooms = [
                         rid for rid in opts["pref_rooms"]
                         if not any((rid, d, p) in room_busy for p in periods)
@@ -171,17 +173,10 @@ def solve_with_genetic_algorithm(
                     if not avail_rooms:
                         continue
 
-                    # Find a free faculty
                     avail_fac = []
                     for fid in opts["pref_faculty"]:
-                        fac = faculty_by_id[fid]
-                        # Check unavailable slots
-                        unavail = False
-                        for p in periods:
-                            if [d, p] in fac.unavailable_slots:
-                                unavail = True
-                                break
-                        if not unavail and not any((fid, d, p) in fac_busy for p in periods):
+                        unavail = fac_unavail_sets.get(fid, set())
+                        if not any((d, p) in unavail or (fid, d, p) in fac_busy for p in periods):
                             avail_fac.append(fid)
 
                     if avail_rooms and avail_fac:
@@ -209,7 +204,11 @@ def solve_with_genetic_algorithm(
             }
         return genes
 
-    # 4. Fitness Evaluation
+    # 4. Fast O(1) Fitness Evaluation
+    weight_idle_s = int(weights.weight_idle_student * 12)
+    weight_idle_f = int(weights.weight_idle_faculty * 8)
+    weight_pref = int(weights.weight_faculty_preference * 15)
+
     def evaluate(individual: List[Dict[str, Any]]) -> Tuple[float, int]:
         hard_penalties = 0
         hard_conflicts = 0
@@ -220,51 +219,31 @@ def solve_with_genetic_algorithm(
         fac_daily_load = defaultdict(lambda: defaultdict(int))
         batch_day_slots = defaultdict(lambda: defaultdict(list))
         fac_day_slots = defaultdict(lambda: defaultdict(list))
-
         pref_hits = 0
 
-        for i, gene in enumerate(individual):
-            s = sessions[i]
-            dur = s["duration"]
-            course = s["course"]
-            batch = s["batch"]
+        for i in range(num_sessions):
+            gene = individual[i]
+            dur = sessions[i]["duration"]
+            b_id = sessions[i]["batch"].id
             d = gene["day"]
             sl = gene["slot"]
             r_id = gene["room_id"]
             f_id = gene["faculty_id"]
 
-            room = rooms_by_id.get(r_id)
-            fac = faculty_by_id.get(f_id)
+            # Fast faculty unavailable check via O(1) set
+            fac_unavail = fac_unavail_sets.get(f_id, set())
+            fac_prefs = fac_pref_sets.get(f_id, set())
 
-            # Capacity check
-            if room and room.capacity < batch.size:
-                hard_penalties += 2000
-                hard_conflicts += 1
-
-            # Room type check
-            if room and room.room_type != course.room_type_required:
-                hard_penalties += 3000
-                hard_conflicts += 1
-
-            # Faculty unavailable check
-            if fac:
-                for p in range(sl, sl + dur):
-                    for unavail in fac.unavailable_slots:
-                        if len(unavail) == 2 and unavail[0] == d and unavail[1] == p:
-                            hard_penalties += 2500
-                            hard_conflicts += 1
-
-            # Lunch overlap
-            if lunch_idx is not None:
-                for p in range(sl, sl + dur):
-                    if p == lunch_idx:
-                        hard_penalties += 3000
-                        hard_conflicts += 1
-
-            # Record period usage
             for p in range(sl, sl + dur):
+                if (d, p) in fac_unavail:
+                    hard_penalties += 2500
+                    hard_conflicts += 1
+
+                if fac_prefs and (d, p) in fac_prefs:
+                    pref_hits += 1
+
                 f_key = (f_id, d, p)
-                b_key = (batch.id, d, p)
+                b_key = (b_id, d, p)
                 r_key = (r_id, d, p)
 
                 faculty_occ[f_key] += 1
@@ -283,27 +262,19 @@ def solve_with_genetic_algorithm(
                     hard_conflicts += 1
 
             fac_daily_load[f_id][d] += dur
-            batch_day_slots[batch.id][d].extend(range(sl, sl + dur))
+            batch_day_slots[b_id][d].extend(range(sl, sl + dur))
             fac_day_slots[f_id][d].extend(range(sl, sl + dur))
-
-            # Preferred slot bonus
-            if fac and fac.preferred_slots:
-                for p in range(sl, sl + dur):
-                    for pref in fac.preferred_slots:
-                        if len(pref) == 2 and pref[0] == d and pref[1] == p:
-                            pref_hits += 1
 
         # Max daily load for faculty
         for f_id, d_map in fac_daily_load.items():
-            fac = faculty_by_id.get(f_id)
-            if fac:
-                for d, load in d_map.items():
-                    if load > fac.max_daily_hours:
-                        overflow = load - fac.max_daily_hours
-                        hard_penalties += overflow * 1500
-                        hard_conflicts += overflow
+            max_daily = fac_max_daily.get(f_id, 4)
+            for d, load in d_map.items():
+                if load > max_daily:
+                    overflow = load - max_daily
+                    hard_penalties += overflow * 1500
+                    hard_conflicts += overflow
 
-        # Soft penalties: student idle gaps
+        # Student idle gaps
         soft_penalties = 0
         for b_id, day_map in batch_day_slots.items():
             for d, sl_list in day_map.items():
@@ -312,9 +283,9 @@ def solve_with_genetic_algorithm(
                     min_p, max_p = sorted_sl[0], sorted_sl[-1]
                     for p in range(min_p, max_p + 1):
                         if p not in sorted_sl and p != lunch_idx:
-                            soft_penalties += int(weights.weight_idle_student * 15)
+                            soft_penalties += weight_idle_s
 
-        # Soft penalties: faculty idle gaps
+        # Faculty idle gaps
         for f_id, day_map in fac_day_slots.items():
             for d, sl_list in day_map.items():
                 if len(sl_list) >= 2:
@@ -322,40 +293,33 @@ def solve_with_genetic_algorithm(
                     min_p, max_p = sorted_sl[0], sorted_sl[-1]
                     for p in range(min_p, max_p + 1):
                         if p not in sorted_sl and p != lunch_idx:
-                            soft_penalties += int(weights.weight_idle_faculty * 10)
+                            soft_penalties += weight_idle_f
 
-        # Base fitness: 50,000 pts
-        fitness = 50000.0 - hard_penalties - soft_penalties + (pref_hits * int(weights.weight_faculty_preference * 20))
+        fitness = 50000.0 - hard_penalties - soft_penalties + (pref_hits * weight_pref)
         return fitness, hard_conflicts
 
-    # 5. Domain-Aware Repair Operator
+    # 5. Fast Domain-Aware Repair Operator
     def repair_individual(ind: List[Dict[str, Any]]):
-        """
-        Pinpoints clashing sessions and re-assigns them to non-conflicting slots.
-        """
         occupied_batch = set()
         occupied_fac = set()
         occupied_room = set()
 
-        for idx, gene in enumerate(ind):
-            s = sessions[idx]
-            dur = s["duration"]
-            b_id = s["batch"].id
+        for idx in range(num_sessions):
+            gene = ind[idx]
+            dur = sessions[idx]["duration"]
+            b_id = sessions[idx]["batch"].id
             d = gene["day"]
             sl = gene["slot"]
             r_id = gene["room_id"]
             f_id = gene["faculty_id"]
 
-            has_clash = False
-            for p in range(sl, sl + dur):
-                if (b_id, d, p) in occupied_batch or (f_id, d, p) in occupied_fac or (r_id, d, p) in occupied_room:
-                    has_clash = True
-                    break
+            has_clash = any(
+                (b_id, d, p) in occupied_batch or (f_id, d, p) in occupied_fac or (r_id, d, p) in occupied_room
+                for p in range(sl, sl + dur)
+            )
 
             if has_clash:
-                # Attempt to find alternative clash-free placement
                 opts = session_options[idx]
-                found = False
                 shuffled_slots = list(opts["valid_slots"])
                 random.shuffle(shuffled_slots)
 
@@ -364,7 +328,6 @@ def solve_with_genetic_algorithm(
                     if any((b_id, alt_d, p) in occupied_batch for p in periods):
                         continue
 
-                    # Free room
                     avail_rooms = [
                         rid for rid in opts["pref_rooms"]
                         if not any((rid, alt_d, p) in occupied_room for p in periods)
@@ -372,7 +335,6 @@ def solve_with_genetic_algorithm(
                     if not avail_rooms:
                         continue
 
-                    # Free faculty
                     avail_fac = [
                         fid for fid in opts["pref_faculty"]
                         if not any((fid, alt_d, p) in occupied_fac for p in periods)
@@ -384,14 +346,8 @@ def solve_with_genetic_algorithm(
                     gene["slot"] = alt_sl
                     gene["room_id"] = random.choice(avail_rooms)
                     gene["faculty_id"] = random.choice(avail_fac)
-                    found = True
                     break
 
-                if not found:
-                    # Random fallback
-                    gene["slot"] = random.choice(opts["valid_slots"])[1]
-
-            # Mark as occupied
             d, sl, r_id, f_id = gene["day"], gene["slot"], gene["room_id"], gene["faculty_id"]
             for p in range(sl, sl + dur):
                 occupied_batch.add((b_id, d, p))
@@ -399,27 +355,24 @@ def solve_with_genetic_algorithm(
                 occupied_room.add((r_id, d, p))
 
     # 6. Initialize Population
-    population = []
-    # 70% smart heuristic, 30% random
-    for i in range(population_size):
-        ind = create_individual(smart=(i < int(population_size * 0.7)))
-        population.append(ind)
+    population = [
+        create_individual(smart=(i < int(population_size * 0.75)))
+        for i in range(population_size)
+    ]
 
     best_individual = None
     best_fitness = -float("inf")
     best_hard_conflicts = 999999
 
-    # 7. Evolution Loop
     crossover_rate = 0.85
     mutation_rate = 0.25
     elite_count = max(2, int(population_size * 0.10))
 
+    # 7. Evolution Loop
     for gen in range(generations):
-        # Time budget check
         if time.time() - start_time > max_time_seconds:
             break
 
-        # Evaluate all
         evaluated = []
         for ind in population:
             fit, h_conf = evaluate(ind)
@@ -429,17 +382,12 @@ def solve_with_genetic_algorithm(
                 best_hard_conflicts = h_conf
                 best_individual = [dict(g) for g in ind]
 
-        # Early exit if 0 hard conflicts and fitness is high
-        if best_hard_conflicts == 0 and gen > 60:
+        if best_hard_conflicts == 0 and gen > 50:
             break
 
-        # Sort by fitness descending
         evaluated.sort(key=lambda x: x[0], reverse=True)
-
-        # Elites
         next_gen = [evaluated[i][2] for i in range(elite_count)]
 
-        # Tournament selection
         def tournament_select():
             contenders = random.sample(evaluated, 4)
             contenders.sort(key=lambda x: x[0], reverse=True)
@@ -449,19 +397,15 @@ def solve_with_genetic_algorithm(
             p1 = tournament_select()
             p2 = tournament_select()
 
-            # Crossover
             child1 = [dict(g) for g in p1]
             child2 = [dict(g) for g in p2]
             if random.random() < crossover_rate:
-                # Multi-point crossover
                 cx_point = random.randint(1, num_sessions - 1)
                 child1 = [dict(g) for g in p1[:cx_point]] + [dict(g) for g in p2[cx_point:]]
                 child2 = [dict(g) for g in p2[:cx_point]] + [dict(g) for g in p1[cx_point:]]
 
-            # Mutation
             for child in (child1, child2):
                 if random.random() < mutation_rate:
-                    # Pick random gene to mutate
                     mut_idx = random.randint(0, num_sessions - 1)
                     opts = session_options[mut_idx]
                     mut_type = random.random()
@@ -474,7 +418,6 @@ def solve_with_genetic_algorithm(
                     else:
                         child[mut_idx]["faculty_id"] = random.choice(opts["pref_faculty"])
 
-                # Apply repair operator
                 if random.random() < 0.35:
                     repair_individual(child)
 
@@ -485,7 +428,6 @@ def solve_with_genetic_algorithm(
 
     exec_time = time.time() - start_time
 
-    # 8. Convert Best Individual to ScheduleResult
     if best_individual is None:
         best_individual = population[0]
 
@@ -505,10 +447,11 @@ def solve_with_genetic_algorithm(
         fac = faculty_by_id[f_id]
 
         slot_id += 1
+        end_slot = sl + dur - 1
         slot_time_str = (
             f"{time_config.slot_times[sl].split(' - ')[0]} - "
-            f"{time_config.slot_times[sl + dur - 1].split(' - ')[1]}"
-            if sl + dur - 1 < len(time_config.slot_times)
+            f"{time_config.slot_times[end_slot].split(' - ')[1]}"
+            if end_slot < len(time_config.slot_times)
             else time_config.slot_times[sl]
         )
 

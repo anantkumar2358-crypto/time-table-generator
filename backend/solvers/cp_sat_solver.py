@@ -1,6 +1,6 @@
 """
 Google OR-Tools CP-SAT Solver for College Timetables.
-Provides exact constraint satisfaction and multi-objective optimization with zero hard conflicts.
+High-speed exact constraint satisfaction and multi-objective optimization with zero hard conflicts.
 """
 import time
 from typing import List, Dict, Tuple, Any
@@ -23,7 +23,7 @@ def solve_with_cp_sat(
     weights: OptimizationWeights = None,
 ) -> ScheduleResult:
     """
-    Solves the college timetable problem using OR-Tools CP-SAT.
+    Solves the college timetable problem using OR-Tools CP-SAT with a streamlined linear formulation.
     """
     start_time = time.time()
     if weights is None:
@@ -45,13 +45,21 @@ def solve_with_cp_sat(
     batches_by_id = {b.id: b for b in dataset.batches}
     courses_by_id = {c.id: c for c in dataset.courses}
 
+    # Pre-index faculty unavailabilities and preferences as fast O(1) sets
+    fac_unavail_sets = {
+        f.id: {tuple(u) for u in f.unavailable_slots if len(u) == 2}
+        for f in dataset.faculty
+    }
+    fac_pref_sets = {
+        f.id: {tuple(p) for p in f.preferred_slots if len(p) == 2}
+        for f in dataset.faculty
+    }
+
     # 1. Decompose courses into discrete sessions to be scheduled
-    # Each session represents a contiguous block of duration L
     sessions = []
     session_id_counter = 0
 
     for course in dataset.courses:
-        # Determine duration of blocks
         block_duration = course.consecutive_slots if course.consecutive_slots > 0 else 1
         weekly_hours = course.weekly_hours
 
@@ -76,7 +84,6 @@ def solve_with_cp_sat(
 
     if not sessions:
         exec_time = time.time() - start_time
-        analytics = compute_analytics(dataset, [])
         return ScheduleResult(
             status="FEASIBLE",
             solver_type="CP-SAT (Google OR-Tools)",
@@ -84,103 +91,74 @@ def solve_with_cp_sat(
             hard_conflicts_count=0,
             quality_score=100.0,
             schedule=[],
-            analytics=analytics,
+            analytics=compute_analytics(dataset, []),
             message="No course sessions requested to schedule."
         )
 
     # 2. Decision variables
-    # x[session_idx, day, start_slot, room_id, faculty_id] -> BoolVar
     x_vars = {}
-    session_candidates = defaultdict(list)
+    session_candidates = [[] for _ in range(len(sessions))]
 
-    # Pre-index candidates for quick constraint formulation
-    faculty_period_vars = defaultdict(list)  # (faculty_id, day, period) -> list of var
-    batch_period_vars = defaultdict(list)    # (batch_id, day, period) -> list of var
-    room_period_vars = defaultdict(list)     # (room_id, day, period) -> list of var
-    faculty_day_vars = defaultdict(list)     # (faculty_id, day) -> list of (var, duration)
-    batch_day_vars = defaultdict(list)       # (batch_id, day) -> list of (var, start_slot, duration)
-    course_batch_day_vars = defaultdict(list) # (course_id, batch_id, day) -> list of var
+    faculty_period_vars = defaultdict(list)
+    batch_period_vars = defaultdict(list)
+    room_period_vars = defaultdict(list)
+    faculty_day_vars = defaultdict(list)
+    course_batch_day_vars = defaultdict(list)
 
-    # Identify eligible rooms and faculty for each session
     for s_idx, session in enumerate(sessions):
         course = session["course"]
         batch = session["batch"]
         dur = session["duration"]
 
-        # Eligible rooms: matching room type and capacity >= batch size
+        # Filter strictly eligible rooms (type and capacity)
         eligible_rooms = [
             r for r in dataset.rooms
             if r.room_type == course.room_type_required and r.capacity >= batch.size
         ]
-        # Fallback if no room exactly matches capacity: take largest available room of correct type
         if not eligible_rooms:
             eligible_rooms = [
                 r for r in dataset.rooms
                 if r.room_type == course.room_type_required
-            ]
-        # Absolute fallback: any room with adequate capacity
-        if not eligible_rooms:
-            eligible_rooms = [
-                r for r in dataset.rooms
-                if r.capacity >= batch.size
-            ]
-        if not eligible_rooms:
-            eligible_rooms = list(dataset.rooms)
+            ] or list(dataset.rooms)
 
-        # Eligible faculty
+        # Filter strictly qualified faculty
         if course.faculty_ids:
             eligible_faculty = [faculty_by_id[fid] for fid in course.faculty_ids if fid in faculty_by_id]
         else:
             eligible_faculty = [
                 f for f in dataset.faculty
                 if f.department == course.department or course.id in f.qualified_courses
-            ]
-        if not eligible_faculty:
-            eligible_faculty = list(dataset.faculty)
+            ] or list(dataset.faculty)
 
-        # Generate candidate assignments (day, start_slot, room, faculty)
         for day in range(days_count):
             for start_slot in range(slots_per_day - dur + 1):
-                # Check lunch / break conflict: no period in [start_slot, start_slot + dur) can be a break
                 periods = range(start_slot, start_slot + dur)
                 if any(p in break_slots for p in periods):
                     continue
 
                 for room in eligible_rooms:
                     for fac in eligible_faculty:
-                        # Check if faculty is unavailable during any of these periods
-                        fac_unavail = False
-                        for p in periods:
-                            for unavail in fac.unavailable_slots:
-                                if len(unavail) == 2 and unavail[0] == day and unavail[1] == p:
-                                    fac_unavail = True
-                                    break
-                            if fac_unavail:
-                                break
-                        if fac_unavail:
+                        fac_unavail = fac_unavail_sets.get(fac.id, set())
+                        if any((day, p) in fac_unavail for p in periods):
                             continue
 
-                        var_name = f"x_{s_idx}_{day}_{start_slot}_{room.id}_{fac.id}"
-                        var = model.NewBoolVar(var_name)
+                        var = model.NewBoolVar(f"x_{s_idx}_{day}_{start_slot}_{room.id}_{fac.id}")
                         key = (s_idx, day, start_slot, room.id, fac.id)
                         x_vars[key] = var
-                        session_candidates[s_idx].append((key, var))
+                        session_candidates[s_idx].append(var)
 
-                        # Map to period occupancy
                         for p in periods:
                             faculty_period_vars[(fac.id, day, p)].append(var)
                             batch_period_vars[(batch.id, day, p)].append(var)
                             room_period_vars[(room.id, day, p)].append(var)
 
                         faculty_day_vars[(fac.id, day)].append((var, dur))
-                        batch_day_vars[(batch.id, day)].append((var, start_slot, dur))
                         course_batch_day_vars[(course.id, batch.id, day)].append(var)
 
     # Constraint 1: Exactly one assignment per session
     for s_idx, session in enumerate(sessions):
         candidates = session_candidates[s_idx]
         if not candidates:
-            # Cannot schedule this session due to complete constraint blockage
             exec_time = time.time() - start_time
             return ScheduleResult(
                 status="INFEASIBLE",
@@ -192,20 +170,20 @@ def solve_with_cp_sat(
                 analytics=compute_analytics(dataset, []),
                 message=f"Session for course '{session['course'].name}' ({session['batch'].name}) has no valid slot/room/faculty candidates."
             )
-        model.AddExactlyOne([var for _, var in candidates])
+        model.AddExactlyOne(candidates)
 
-    # Constraint 2: No faculty clashes (at most 1 class per faculty per period)
-    for (fac_id, day, period), var_list in faculty_period_vars.items():
+    # Constraint 2: No faculty clashes
+    for var_list in faculty_period_vars.values():
         if len(var_list) > 1:
             model.Add(sum(var_list) <= 1)
 
-    # Constraint 3: No batch clashes (at most 1 class per student batch per period)
-    for (batch_id, day, period), var_list in batch_period_vars.items():
+    # Constraint 3: No batch clashes
+    for var_list in batch_period_vars.values():
         if len(var_list) > 1:
             model.Add(sum(var_list) <= 1)
 
-    # Constraint 4: No room clashes (at most 1 class per room per period)
-    for (room_id, day, period), var_list in room_period_vars.items():
+    # Constraint 4: No room clashes
+    for var_list in room_period_vars.values():
         if len(var_list) > 1:
             model.Add(sum(var_list) <= 1)
 
@@ -213,12 +191,9 @@ def solve_with_cp_sat(
     for (fac_id, day), var_dur_list in faculty_day_vars.items():
         fac = faculty_by_id.get(fac_id)
         if fac and var_dur_list:
-            model.Add(
-                sum(var * dur for var, dur in var_dur_list) <= fac.max_daily_hours
-            )
+            model.Add(sum(var * dur for var, dur in var_dur_list) <= fac.max_daily_hours)
 
     # Constraint 6: Spread course lectures across days for a batch
-    # (avoid cramming 3 lectures of the same course on the same day if weekly_hours <= days_count)
     for (course_id, batch_id, day), var_list in course_batch_day_vars.items():
         course = courses_by_id[course_id]
         if len(var_list) > 1:
@@ -228,86 +203,75 @@ def solve_with_cp_sat(
     # 3. Soft Constraints & Multi-Objective Optimization
     objective_terms = []
 
-    # Objective A: Faculty Preferred Slots (Reward bonus)
+    # Objective A: Faculty Preferred Slots
     pref_weight = int(weights.weight_faculty_preference * 10)
-    for key, var in x_vars.items():
-        s_idx, day, start_slot, room_id, fac_id = key
-        session = sessions[s_idx]
-        dur = session["duration"]
-        fac = faculty_by_id.get(fac_id)
-        if fac and fac.preferred_slots:
-            is_preferred = False
-            for p in range(start_slot, start_slot + dur):
-                for pref in fac.preferred_slots:
-                    if len(pref) == 2 and pref[0] == day and pref[1] == p:
-                        is_preferred = True
-                        break
-                if is_preferred:
-                    break
-            if is_preferred:
-                # Negative cost in minimization = reward
-                objective_terms.append(-pref_weight * var)
+    for (s_idx, day, start_slot, room_id, fac_id), var in x_vars.items():
+        dur = sessions[s_idx]["duration"]
+        fac_prefs = fac_pref_sets.get(fac_id, set())
+        if fac_prefs and any((day, p) in fac_prefs for p in range(start_slot, start_slot + dur)):
+            objective_terms.append(-pref_weight * var)
 
-    # Objective B: Preferred Room for Batch (Reward bonus)
-    for key, var in x_vars.items():
-        s_idx, day, start_slot, room_id, fac_id = key
-        session = sessions[s_idx]
-        batch = session["batch"]
+    # Objective B: Preferred Room for Batch
+    for (s_idx, day, start_slot, room_id, fac_id), var in x_vars.items():
+        batch = sessions[s_idx]["batch"]
         if batch.preferred_room_id and room_id == batch.preferred_room_id:
             objective_terms.append(-int(weights.weight_room_utilization * 5) * var)
 
-    # Objective C: Student Workload Balance across Days
-    # Penalize days with excessive or zero classes for batches
-    ideal_daily_hours = 4  # approx ideal daily classes
+    # Objective C: Workload Uniformity across Days
     balance_weight = int(weights.weight_workload_balance * 8)
+    ideal_daily_hours = 4
     for batch in dataset.batches:
         for day in range(days_count):
-            vars_for_day = batch_day_vars.get((batch.id, day), [])
+            vars_for_day = [v for p in range(slots_per_day) for v in batch_period_vars.get((batch.id, day, p), [])]
             if vars_for_day:
                 day_total = model.NewIntVar(0, slots_per_day, f"day_hrs_{batch.id}_{day}")
-                model.Add(day_total == sum(v * d for v, _, d in vars_for_day))
-                # Penalize deviation from ideal daily hours
+                model.Add(day_total == sum(vars_for_day))
                 dev_var = model.NewIntVar(0, slots_per_day, f"dev_{batch.id}_{day}")
                 model.Add(dev_var >= day_total - ideal_daily_hours)
                 model.Add(dev_var >= ideal_daily_hours - day_total)
                 objective_terms.append(balance_weight * dev_var)
 
-    # Objective D: Compact Student Schedule (Minimize idle gaps)
-    # Penalize large spread between min slot and max slot relative to total classes
-    student_idle_weight = int(weights.weight_idle_student * 12)
+    # Objective D: Compact Student Schedule (Period-level span minimization)
+    student_idle_weight = int(weights.weight_idle_student * 10)
     for batch in dataset.batches:
         for day in range(days_count):
-            vars_for_day = batch_day_vars.get((batch.id, day), [])
-            if vars_for_day:
-                min_slot_var = model.NewIntVar(0, slots_per_day, f"min_slot_{batch.id}_{day}")
-                max_slot_var = model.NewIntVar(0, slots_per_day, f"max_slot_{batch.id}_{day}")
-                has_any_class = model.NewBoolVar(f"has_class_{batch.id}_{day}")
+            act_vars = []
+            for p in range(slots_per_day):
+                v_list = batch_period_vars.get((batch.id, day, p), [])
+                if v_list:
+                    act = model.NewBoolVar(f"act_{batch.id}_{day}_{p}")
+                    model.Add(act == sum(v_list))
+                    act_vars.append((p, act))
 
-                # If has_any_class == 0, spread is 0
-                model.Add(sum(v for v, _, _ in vars_for_day) > 0).OnlyEnforceIf(has_any_class)
-                model.Add(sum(v for v, _, _ in vars_for_day) == 0).OnlyEnforceIf(has_any_class.Not())
+            if act_vars:
+                has_cls = model.NewBoolVar(f"has_{batch.id}_{day}")
+                model.Add(sum(a for _, a in act_vars) > 0).OnlyEnforceIf(has_cls)
+                model.Add(sum(a for _, a in act_vars) == 0).OnlyEnforceIf(has_cls.Not())
 
-                for v, s_slot, dur in vars_for_day:
-                    model.Add(min_slot_var <= s_slot).OnlyEnforceIf(v)
-                    model.Add(max_slot_var >= s_slot + dur).OnlyEnforceIf(v)
+                min_p = model.NewIntVar(0, slots_per_day, f"min_{batch.id}_{day}")
+                max_p = model.NewIntVar(0, slots_per_day, f"max_{batch.id}_{day}")
+                for p, a in act_vars:
+                    model.Add(min_p <= p).OnlyEnforceIf(a)
+                    model.Add(max_p >= p).OnlyEnforceIf(a)
 
-                span_var = model.NewIntVar(0, slots_per_day, f"span_{batch.id}_{day}")
-                model.Add(span_var >= max_slot_var - min_slot_var)
-                # Idle time = span - total classes
-                total_classes_var = model.NewIntVar(0, slots_per_day, f"tot_cls_{batch.id}_{day}")
-                model.Add(total_classes_var == sum(v * d for v, _, d in vars_for_day))
+                span = model.NewIntVar(0, slots_per_day, f"span_{batch.id}_{day}")
+                model.Add(span >= max_p - min_p + 1 - (slots_per_day * (1 - has_cls)))
+                model.Add(span >= 0)
 
-                idle_var = model.NewIntVar(0, slots_per_day, f"idle_{batch.id}_{day}")
-                model.Add(idle_var >= span_var - total_classes_var)
-                objective_terms.append(student_idle_weight * idle_var)
+                tot_cls = model.NewIntVar(0, slots_per_day, f"tot_{batch.id}_{day}")
+                model.Add(tot_cls == sum(a for _, a in act_vars))
+
+                idle = model.NewIntVar(0, slots_per_day, f"idle_{batch.id}_{day}")
+                model.Add(idle >= span - tot_cls)
+                objective_terms.append(student_idle_weight * idle)
 
     if objective_terms:
         model.Minimize(sum(objective_terms))
 
-    # 4. Execute CP-SAT Solver
+    # 4. Execute CP-SAT Solver with multi-threaded portfolio search
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(max_time_seconds)
-    solver.parameters.num_workers = 4
+    solver.parameters.num_workers = 8
     solver.parameters.log_search_progress = False
 
     status = solver.Solve(model)
@@ -328,10 +292,11 @@ def solve_with_cp_sat(
                 faculty = faculty_by_id[fac_id]
 
                 slot_id += 1
+                end_slot = start_slot + dur - 1
                 slot_time_str = (
                     f"{time_config.slot_times[start_slot].split(' - ')[0]} - "
-                    f"{time_config.slot_times[start_slot + dur - 1].split(' - ')[1]}"
-                    if start_slot + dur - 1 < len(time_config.slot_times)
+                    f"{time_config.slot_times[end_slot].split(' - ')[1]}"
+                    if end_slot < len(time_config.slot_times)
                     else time_config.slot_times[start_slot]
                 )
 
@@ -357,7 +322,6 @@ def solve_with_cp_sat(
                     )
                 )
 
-        # Sort schedule chronologically
         schedule.sort(key=lambda s: (s.day_idx, s.slot_idx, s.batch_name))
         analytics = compute_analytics(dataset, schedule)
 

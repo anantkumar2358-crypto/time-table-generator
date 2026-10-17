@@ -1,5 +1,6 @@
 """
 Conflict auditor, validation engine, and optimization analytics for College Timetables.
+Optimized for single-pass O(N) evaluation and instant O(1) set lookups.
 """
 from typing import List, Dict, Any, Tuple
 import math
@@ -26,6 +27,12 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
     batches_by_id = {b.id: b for b in dataset.batches}
     courses_by_id = {c.id: c for c in dataset.courses}
 
+    # Pre-index faculty unavailabilities as fast O(1) sets of (day, period)
+    fac_unavail_sets = {
+        f.id: {tuple(u) for u in f.unavailable_slots if len(u) == 2}
+        for f in dataset.faculty
+    }
+
     lunch_idx = dataset.time_config.lunch_slot_idx
     slots_per_day = dataset.time_config.slots_per_day
 
@@ -34,7 +41,7 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
     batch_period_map = defaultdict(list)
     room_period_map = defaultdict(list)
 
-    # Track hours scheduled per (course_id, batch_id)
+    # Track hours scheduled per (course_id, batch_id) and faculty daily load
     course_batch_hours = defaultdict(int)
     faculty_daily_hours = defaultdict(lambda: defaultdict(int))
 
@@ -47,7 +54,11 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
             )
             hard_conflicts += 1
 
-        # Check lunch overlap
+        course_batch_hours[(slot.course_id, slot.batch_id)] += slot.duration
+        faculty_daily_hours[slot.faculty_id][slot.day_idx] += slot.duration
+
+        # Period-level checks
+        fac_unavail = fac_unavail_sets.get(slot.faculty_id, set())
         for period in range(slot.slot_idx, slot.slot_idx + slot.duration):
             if lunch_idx is not None and period == lunch_idx:
                 conflicts.append(
@@ -56,45 +67,37 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
                 )
                 hard_conflicts += 1
 
+            if (slot.day_idx, period) in fac_unavail:
+                fac = faculty_by_id.get(slot.faculty_id)
+                fac_name = fac.name if fac else slot.faculty_id
+                conflicts.append(
+                    f"[FACULTY UNAVAILABLE] Faculty '{fac_name}' is marked unavailable on "
+                    f"{slot.day_name} at slot {period} ('{slot.course_name}')."
+                )
+                hard_conflicts += 1
+
             faculty_period_map[(slot.faculty_id, slot.day_idx, period)].append(slot)
             batch_period_map[(slot.batch_id, slot.day_idx, period)].append(slot)
             room_period_map[(slot.room_id, slot.day_idx, period)].append(slot)
 
-        course_batch_hours[(slot.course_id, slot.batch_id)] += slot.duration
-        faculty_daily_hours[slot.faculty_id][slot.day_idx] += slot.duration
-
         # Room Capacity check
         room = rooms_by_id.get(slot.room_id)
         batch = batches_by_id.get(slot.batch_id)
-        if room and batch:
-            if room.capacity < batch.size:
-                conflicts.append(
-                    f"[CAPACITY OVERFLOW] Room '{room.name}' (Cap: {room.capacity}) is too small for batch '{batch.name}' "
-                    f"(Size: {batch.size}) during '{slot.course_name}' on {slot.day_name}."
-                )
-                hard_conflicts += 1
+        if room and batch and room.capacity < batch.size:
+            conflicts.append(
+                f"[CAPACITY OVERFLOW] Room '{room.name}' (Cap: {room.capacity}) is too small for batch '{batch.name}' "
+                f"(Size: {batch.size}) during '{slot.course_name}' on {slot.day_name}."
+            )
+            hard_conflicts += 1
 
         # Room Type check
         course = courses_by_id.get(slot.course_id)
-        if room and course:
-            if course.room_type_required != room.room_type:
-                conflicts.append(
-                    f"[ROOM TYPE MISMATCH] Course '{course.name}' requires '{course.room_type_required.value}' "
-                    f"but assigned room '{room.name}' is '{room.room_type.value}'."
-                )
-                hard_conflicts += 1
-
-        # Faculty Availability check
-        fac = faculty_by_id.get(slot.faculty_id)
-        if fac:
-            for period in range(slot.slot_idx, slot.slot_idx + slot.duration):
-                for unavail in fac.unavailable_slots:
-                    if len(unavail) == 2 and unavail[0] == slot.day_idx and unavail[1] == period:
-                        conflicts.append(
-                            f"[FACULTY UNAVAILABLE] Faculty '{fac.name}' is marked unavailable on "
-                            f"{slot.day_name} at slot {period} ('{slot.course_name}')."
-                        )
-                        hard_conflicts += 1
+        if room and course and course.room_type_required != room.room_type:
+            conflicts.append(
+                f"[ROOM TYPE MISMATCH] Course '{course.name}' requires '{course.room_type_required.value}' "
+                f"but assigned room '{room.name}' is '{room.room_type.value}'."
+            )
+            hard_conflicts += 1
 
     # Check 1: Faculty clashes (double-booking)
     for (f_id, day, period), slots_in_period in faculty_period_map.items():
@@ -160,25 +163,59 @@ def validate_schedule(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
 
 def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) -> ScheduleAnalytics:
     """
-    Computes in-depth optimization metrics and quality score for the schedule.
+    Computes in-depth optimization metrics and quality score in a single streamlined pass.
     """
     conflicts, hard_conflicts_count = validate_schedule(dataset, schedule)
 
     days_count = len(dataset.time_config.days)
     slots_per_day = dataset.time_config.slots_per_day
     lunch_idx = dataset.time_config.lunch_slot_idx
-    total_slots_scheduled = sum(s.duration for s in schedule)
 
     faculty_by_id = {f.id: f for f in dataset.faculty}
     batches_by_id = {b.id: b for b in dataset.batches}
     rooms_by_id = {r.id: r for r in dataset.rooms}
 
-    # 1. Batch Idle Gaps Analysis
-    batch_day_occupied = defaultdict(lambda: defaultdict(set))
-    for slot in schedule:
-        for period in range(slot.slot_idx, slot.slot_idx + slot.duration):
-            batch_day_occupied[slot.batch_id][slot.day_idx].add(period)
+    # Pre-index preferred slots as fast sets
+    fac_pref_sets = {
+        f.id: {tuple(p) for p in f.preferred_slots if len(p) == 2}
+        for f in dataset.faculty
+    }
 
+    # Single-pass collectors
+    batch_day_occupied = defaultdict(lambda: defaultdict(set))
+    fac_day_occupied = defaultdict(lambda: defaultdict(set))
+    room_occupied_hours = defaultdict(int)
+    room_capacity_ratios = []
+    total_slots_scheduled = 0
+    preferred_slots_met = 0
+    total_slots_with_pref_target = 0
+
+    for slot in schedule:
+        dur = slot.duration
+        total_slots_scheduled += dur
+        room_occupied_hours[slot.room_id] += dur
+
+        # Room capacity efficiency
+        room = rooms_by_id.get(slot.room_id)
+        batch = batches_by_id.get(slot.batch_id)
+        if room and batch and room.capacity > 0:
+            ratio = min(1.0, batch.size / room.capacity)
+            room_capacity_ratios.append(ratio * dur)
+
+        # Faculty preferences
+        fac_prefs = fac_pref_sets.get(slot.faculty_id, set())
+        if fac_prefs:
+            total_slots_with_pref_target += dur
+            for p in range(slot.slot_idx, slot.slot_idx + dur):
+                if (slot.day_idx, p) in fac_prefs:
+                    preferred_slots_met += 1
+
+        # Period sets for idle gap analysis
+        for p in range(slot.slot_idx, slot.slot_idx + dur):
+            batch_day_occupied[slot.batch_id][slot.day_idx].add(p)
+            fac_day_occupied[slot.faculty_id][slot.day_idx].add(p)
+
+    # 1. Batch Idle Gaps Analysis
     batch_idle_gaps_total = 0
     batch_stats = {}
     for batch in dataset.batches:
@@ -188,7 +225,6 @@ def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
             periods = sorted(list(batch_day_occupied[batch.id][day]))
             daily_hours.append(len(periods))
             if len(periods) >= 2:
-                # Any period between min and max that is not occupied and not lunch is an idle gap
                 min_p, max_p = periods[0], periods[-1]
                 for p in range(min_p, max_p + 1):
                     if p not in periods and p != lunch_idx:
@@ -199,30 +235,14 @@ def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
             "department": batch.department,
             "idle_gap_hours": b_idle,
             "total_weekly_hours": sum(daily_hours),
-            "daily_hours": daily_hours
+            "daily_hours": daily_hours,
         }
 
     avg_batch_idle = batch_idle_gaps_total / max(1, len(dataset.batches))
 
-    # 2. Faculty Idle Gaps and Workloads
-    fac_day_occupied = defaultdict(lambda: defaultdict(set))
+    # 2. Faculty Idle Gaps Analysis
     faculty_workloads = {}
     total_faculty_idle = 0
-    preferred_slots_met = 0
-    total_slots_with_pref_target = 0
-
-    for slot in schedule:
-        fac = faculty_by_id.get(slot.faculty_id)
-        if fac and fac.preferred_slots:
-            total_slots_with_pref_target += slot.duration
-            for p in range(slot.slot_idx, slot.slot_idx + slot.duration):
-                for pref in fac.preferred_slots:
-                    if len(pref) == 2 and pref[0] == slot.day_idx and pref[1] == p:
-                        preferred_slots_met += 1
-
-        for period in range(slot.slot_idx, slot.slot_idx + slot.duration):
-            fac_day_occupied[slot.faculty_id][slot.day_idx].add(period)
-
     for fac in dataset.faculty:
         f_idle = 0
         daily_hours = []
@@ -242,7 +262,7 @@ def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
             "idle_gap_hours": f_idle,
             "total_weekly_hours": sum(daily_hours),
             "daily_hours": daily_hours,
-            "max_daily_hours": fac.max_daily_hours
+            "max_daily_hours": fac.max_daily_hours,
         }
 
     avg_fac_idle = total_faculty_idle / max(1, len(dataset.faculty))
@@ -260,20 +280,8 @@ def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
         daily_std_dev = 0.0
 
     # 4. Room Utilization Rate & Capacity Efficiency
-    # Usable periods per week per room (excluding lunch)
     usable_periods_per_day = slots_per_day - (1 if lunch_idx is not None else 0)
     total_available_room_hours = len(dataset.rooms) * days_count * usable_periods_per_day
-
-    room_occupied_hours = defaultdict(int)
-    room_capacity_ratios = []
-
-    for slot in schedule:
-        room_occupied_hours[slot.room_id] += slot.duration
-        room = rooms_by_id.get(slot.room_id)
-        batch = batches_by_id.get(slot.batch_id)
-        if room and batch and room.capacity > 0:
-            ratio = min(1.0, batch.size / room.capacity)
-            room_capacity_ratios.append(ratio * slot.duration)
 
     total_room_occupied = sum(room_occupied_hours.values())
     room_utilization_rate = (total_room_occupied / max(1, total_available_room_hours)) * 100.0
@@ -284,38 +292,29 @@ def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
     )
 
     room_occupancy = {}
+    room_max_hrs = days_count * usable_periods_per_day
     for r in dataset.rooms:
         hrs = room_occupied_hours[r.id]
-        room_max_hrs = days_count * usable_periods_per_day
         room_occupancy[r.id] = {
             "name": r.name,
             "type": r.room_type.value,
             "capacity": r.capacity,
             "occupied_hours": hrs,
             "max_available_hours": room_max_hrs,
-            "utilization_percent": round((hrs / max(1, room_max_hrs)) * 100.0, 1)
+            "utilization_percent": round((hrs / max(1, room_max_hrs)) * 100.0, 1),
         }
 
     # 5. Faculty Preference Satisfaction %
     if total_slots_with_pref_target > 0:
         pref_satisfaction_pct = (preferred_slots_met / total_slots_with_pref_target) * 100.0
     else:
-        pref_satisfaction_pct = 100.0  # None requested = 100% satisfied
+        pref_satisfaction_pct = 100.0
 
     # 6. Overall Quality Score (0 - 100)
-    # Starts at 100
-    # Deductions:
-    # - 15 points per hard conflict (capped at 0)
-    # - Deduct for average batch idle gap hours (e.g. -2.5 per hour)
-    # - Deduct for average faculty idle gap hours (e.g. -1.5 per hour)
-    # - Deduct for workload standard deviation (high variance > 1.0)
-    # - Reward high room capacity efficiency and high preference satisfaction
     base_score = 100.0
-
     if hard_conflicts_count > 0:
         base_score -= min(100.0, hard_conflicts_count * 20.0)
 
-    # Soft penalties
     idle_penalty = (avg_batch_idle * 2.5) + (avg_fac_idle * 1.5)
     variance_penalty = daily_std_dev * 2.0
     pref_bonus = (pref_satisfaction_pct / 100.0) * 5.0
@@ -323,7 +322,6 @@ def compute_analytics(dataset: TimetableDataset, schedule: List[TimetableSlot]) 
     quality_score = max(0.0, min(100.0, base_score - idle_penalty - variance_penalty + pref_bonus))
     quality_score = round(quality_score, 1)
 
-    # Status helper
     def get_status(score, high_is_good=True, thresh_good=75, thresh_warn=50):
         if high_is_good:
             if score >= thresh_good:
