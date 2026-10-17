@@ -10,7 +10,6 @@ import time
 from backend.models import GenerationRequest, OptimizationWeights
 from backend.presets import ALL_PRESETS, get_engineering_preset, get_business_school_preset
 from backend.solvers.cp_sat_solver import solve_with_cp_sat
-from backend.solvers.genetic_solver import solve_with_genetic_algorithm
 from backend.analytics import compute_analytics, validate_schedule
 from backend.exporters.excel_exporter import export_timetable_to_excel
 from backend.exporters.pdf_exporter import export_timetable_to_pdf
@@ -39,20 +38,8 @@ def cmd_test():
     assert len(res_cp.schedule) > 0, "CP-SAT produced empty schedule!"
     print("      -> CP-SAT Solver PASSED (100% Conflict-Free)")
 
-    # Test 2: Genetic Algorithm Solver
-    print("\n[3/4] Testing Genetic Algorithm Solver...")
-    t0 = time.time()
-    res_ga = solve_with_genetic_algorithm(dataset, population_size=60, generations=100, max_time_seconds=15)
-    t_ga = time.time() - t0
-    print(f"      Status: {res_ga.status}")
-    print(f"      Hard Conflicts: {res_ga.hard_conflicts_count}")
-    print(f"      Quality Score: {res_ga.quality_score} / 100")
-    print(f"      Sessions Scheduled: {len(res_ga.schedule)}")
-    print(f"      Execution Time: {round(t_ga, 2)}s")
-    print(f"      -> Genetic Algorithm Solver PASSED (Status: {res_ga.status})")
-
-    # Test 3: Exporters
-    print("\n[4/4] Testing Document Exporters (Excel & PDF)...")
+    # Test 2: Exporters
+    print("\n[3/3] Testing Document Exporters (Excel & PDF)...")
     xlsx = export_timetable_to_excel(dataset, res_cp)
     pdf = export_timetable_to_pdf(dataset, res_cp)
     print(f"      Generated Excel Workbook: {len(xlsx):,} bytes")
@@ -73,12 +60,9 @@ def cmd_generate(args):
         sys.exit(1)
 
     dataset = ALL_PRESETS[preset_name]()
-    print(f"Generating timetable for '{dataset.name}' using solver '{args.solver}'...")
+    print(f"Generating timetable for '{dataset.name}' using Google OR-Tools CP-SAT...")
 
-    if args.solver == "genetic":
-        res = solve_with_genetic_algorithm(dataset, max_time_seconds=args.max_time)
-    else:
-        res = solve_with_cp_sat(dataset, max_time_seconds=args.max_time)
+    res = solve_with_cp_sat(dataset, max_time_seconds=args.max_time)
 
     print("\n--- Generation Summary ---")
     print(f"Status:          {res.status}")
@@ -112,7 +96,6 @@ def main():
     # generate subcommand
     gen_p = subparsers.add_parser("generate", help="Generate a timetable")
     gen_p.add_argument("--preset", default="engineering", choices=["engineering", "business"], help="Preset dataset")
-    gen_p.add_argument("--solver", default="cp_sat", choices=["cp_sat", "genetic"], help="Solver engine")
     gen_p.add_argument("--max-time", type=int, default=30, help="Maximum solve time in seconds")
     gen_p.add_argument("--export-excel", type=str, default="", help="Path to export .xlsx file")
     gen_p.add_argument("--export-pdf", type=str, default="", help="Path to export .pdf file")

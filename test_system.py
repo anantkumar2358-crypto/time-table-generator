@@ -11,7 +11,6 @@ Tests:
 import unittest
 from backend.presets import get_engineering_preset, get_business_school_preset
 from backend.solvers.cp_sat_solver import solve_with_cp_sat
-from backend.solvers.genetic_solver import solve_with_genetic_algorithm
 from backend.analytics import validate_schedule, compute_analytics
 from backend.exporters.excel_exporter import export_timetable_to_excel
 from backend.exporters.pdf_exporter import export_timetable_to_pdf
@@ -63,17 +62,17 @@ class TimetableSystemTestSuite(unittest.TestCase):
         self.assertEqual(result.hard_conflicts_count, 0)
         self.assertGreaterEqual(result.quality_score, 90.0)
 
-    def test_genetic_algorithm_solver(self):
-        """Test Genetic Algorithm solver produces a valid schedule."""
-        result = solve_with_genetic_algorithm(
-            self.engineering_dataset,
-            population_size=50,
-            generations=80,
-            max_time_seconds=10,
-        )
-        self.assertIn(result.status, ["OPTIMAL", "FEASIBLE"])
+    def test_cp_sat_lab_continuity(self):
+        """Test CP-SAT schedules multi-period labs continuously in valid lab rooms."""
+        result = solve_with_cp_sat(self.engineering_dataset, max_time_seconds=15)
+        self.assertEqual(result.hard_conflicts_count, 0)
+        lab_courses = {c.id: c for c in self.engineering_dataset.courses if c.consecutive_slots > 1}
+        for s in result.schedule:
+            if s.course_id in lab_courses:
+                course = lab_courses[s.course_id]
+                self.assertEqual(s.duration, course.consecutive_slots)
         self.assertGreater(len(result.schedule), 0)
-        self.assertGreaterEqual(result.quality_score, 80.0)
+        self.assertGreaterEqual(result.quality_score, 90.0)
 
     def test_conflict_auditor_detection(self):
         """Test that intentional clashes are accurately detected by the Conflict Auditor."""

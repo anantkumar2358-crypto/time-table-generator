@@ -556,16 +556,11 @@ export default function App() {
               <option value="custom">Custom Configured College</option>
             </select>
 
-            {/* Solver Engine Selector */}
-            <select
-              className="select-control"
-              value={solverType}
-              onChange={(e) => setSolverType(e.target.value)}
-              title="Optimization Solver Engine"
-            >
-              <option value="cp_sat">OR-Tools CP-SAT (Provably Optimal)</option>
-              <option value="genetic">Genetic Algorithm (Evolutionary)</option>
-            </select>
+            {/* Dedicated CP-SAT Engine Badge */}
+            <div className="engine-badge" title="Powered by Google OR-Tools CP-SAT Solver (8 Parallel CPU Cores)">
+              <Sparkles size={14} color="#2563eb" />
+              <span>OR-Tools CP-SAT</span>
+            </div>
 
             {/* Weights / Settings */}
             <button
@@ -609,7 +604,7 @@ export default function App() {
               <div className="kpi-info">
                 <div className="kpi-label">Quality Score</div>
                 <div className="kpi-value">{analytics.quality_score} <span style={{ fontSize: '0.85rem', color: '#64748b' }}>/ 100</span></div>
-                <div className="kpi-sub">{solverType === 'cp_sat' ? 'OR-Tools Exact CP' : 'Genetic Algorithm'}</div>
+                <div className="kpi-sub">Google OR-Tools CP-SAT</div>
               </div>
             </div>
 
@@ -1329,7 +1324,7 @@ export default function App() {
             </div>
             <div className="modal-body">
               <p style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                Customize the multi-objective penalties. The CP-SAT and Genetic solvers will optimize schedules according to your institutional priorities.
+                Customize the multi-objective penalties. The Google OR-Tools CP-SAT engine will optimize schedules according to your institutional priorities.
               </p>
 
               <div>
@@ -1527,7 +1522,7 @@ export default function App() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <div className="optim-engine-tag">
-                  {solverType === 'cp_sat' ? 'Google OR-Tools CP-SAT' : 'Adaptive Genetic Algorithm'}
+                  Google OR-Tools CP-SAT (8 Cores)
                 </div>
                 {optimProgress.isComplete && (
                   <button
@@ -1638,7 +1633,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="app-footer">
-        Powered by Google OR-Tools CP-SAT & Advanced Genetic Metaheuristic Algorithms &bull; Intelligent College Timetable Generator
+        Powered by Google OR-Tools CP-SAT Exact Constraint Solver &bull; Intelligent College Timetable Generator
       </footer>
     </div>
   );

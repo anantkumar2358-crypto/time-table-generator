@@ -20,7 +20,6 @@ from .models import (
     ScheduleAnalytics,
 )
 from .solvers.cp_sat_solver import solve_with_cp_sat
-from .solvers.genetic_solver import solve_with_genetic_algorithm
 from .analytics import validate_schedule, compute_analytics
 from .presets import ALL_PRESETS, get_engineering_preset
 from .exporters.excel_exporter import export_timetable_to_excel
@@ -28,7 +27,7 @@ from .exporters.pdf_exporter import export_timetable_to_pdf
 
 app = FastAPI(
     title="Intelligent College Timetable Generator",
-    description="Conflict-free timetable generation with OR-Tools CP-SAT & Genetic Algorithms",
+    description="Conflict-free timetable generation with Google OR-Tools CP-SAT engine",
     version="2.0.0",
 )
 
@@ -101,20 +100,11 @@ def get_preset_by_id(preset_id: str):
 @app.post("/api/generate", response_model=ScheduleResult)
 def generate_timetable(req: GenerationRequest):
     try:
-        if req.solver_type == "genetic":
-            result = solve_with_genetic_algorithm(
-                dataset=req.dataset,
-                population_size=req.ga_population_size,
-                generations=req.ga_generations,
-                max_time_seconds=req.max_time_seconds,
-                weights=req.dataset.weights,
-            )
-        else:
-            result = solve_with_cp_sat(
-                dataset=req.dataset,
-                max_time_seconds=req.max_time_seconds,
-                weights=req.dataset.weights,
-            )
+        result = solve_with_cp_sat(
+            dataset=req.dataset,
+            max_time_seconds=req.max_time_seconds,
+            weights=req.dataset.weights,
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Solver error: {str(e)}")
@@ -159,26 +149,17 @@ async def generate_timetable_stream(req: GenerationRequest):
             "step_index": 3,
             "conflicts": 4,
             "quality": 84.0,
-            "details": f"Solving with {req.solver_type.upper()} engine across 8 parallel CPU worker cores..."
+            "details": "Solving exact constraint model with Google OR-Tools CP-SAT across 8 parallel CPU worker cores..."
         }) + "\n"
         await asyncio.sleep(0.9)
 
-        # Execute actual solver in worker thread
+        # Execute CP-SAT solver in worker thread
         loop = asyncio.get_event_loop()
-        if req.solver_type == "genetic":
-            result = await loop.run_in_executor(None, lambda: solve_with_genetic_algorithm(
-                dataset=req.dataset,
-                population_size=req.ga_population_size,
-                generations=req.ga_generations,
-                max_time_seconds=req.max_time_seconds,
-                weights=req.dataset.weights,
-            ))
-        else:
-            result = await loop.run_in_executor(None, lambda: solve_with_cp_sat(
-                dataset=req.dataset,
-                max_time_seconds=req.max_time_seconds,
-                weights=req.dataset.weights,
-            ))
+        result = await loop.run_in_executor(None, lambda: solve_with_cp_sat(
+            dataset=req.dataset,
+            max_time_seconds=req.max_time_seconds,
+            weights=req.dataset.weights,
+        ))
 
         # Stage 4: Workload & Idle Gap Balancing (88%)
         yield json.dumps({
