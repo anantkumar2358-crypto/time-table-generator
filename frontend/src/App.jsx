@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Calendar,
   Clock,
@@ -17,6 +17,10 @@ import {
   BarChart3,
   X,
   Layers,
+  Plus,
+  Trash2,
+  Upload,
+  Download,
 } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -52,6 +56,18 @@ export default function App() {
   const [moveTargetRoom, setMoveTargetRoom] = useState('');
   const [moveFeedback, setMoveFeedback] = useState(null);
   const [isMoving, setIsMoving] = useState(false);
+
+  // Add Entity Modals
+  const [showAddRoomModal, setShowAddRoomModal] = useState(false);
+  const [newRoom, setNewRoom] = useState({ name: '', room_type: 'CLASSROOM', capacity: 60, building: 'Academic Block' });
+
+  const [showAddFacultyModal, setShowAddFacultyModal] = useState(false);
+  const [newFaculty, setNewFaculty] = useState({ name: '', department: 'Computer Science', designation: 'Assistant Professor', max_daily_hours: 4 });
+
+  const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+  const [newCourse, setNewCourse] = useState({ code: '', name: '', department: 'Computer Science', course_type: 'THEORY', weekly_hours: 3, consecutive_slots: 1, room_type_required: 'CLASSROOM', batch_id: '', faculty_id: '' });
+
+  const fileInputRef = useRef(null);
 
   // Core API functions declared before useEffect for React Compiler optimization
   const runGenerate = useCallback(async (dsToUse = dataset, solver = solverType, currentWeights = weights) => {
@@ -128,10 +144,127 @@ export default function App() {
 
   // When selectedPresetId changes, load dataset and generate
   useEffect(() => {
-    if (selectedPresetId) {
+    if (selectedPresetId && selectedPresetId !== 'custom') {
       loadPresetAndGenerate(selectedPresetId);
     }
   }, [selectedPresetId, loadPresetAndGenerate]);
+
+  // JSON Import & Export
+  const handleExportJson = () => {
+    if (!dataset) return;
+    const jsonStr = JSON.stringify(dataset, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${dataset.name.replace(/\s+/g, '_')}_Config.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const handleImportJson = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const importedData = JSON.parse(event.target.result);
+        if (!importedData.rooms || !importedData.faculty || !importedData.courses || !importedData.batches) {
+          alert('Invalid timetable JSON structure. Missing required rooms, faculty, courses, or batches.');
+          return;
+        }
+        setDataset(importedData);
+        setSelectedPresetId('custom');
+        if (importedData.batches.length > 0) setSelectedBatchId(importedData.batches[0].id);
+        if (importedData.faculty.length > 0) setSelectedFacultyId(importedData.faculty[0].id);
+        if (importedData.rooms.length > 0) setSelectedRoomId(importedData.rooms[0].id);
+        await runGenerate(importedData, solverType, importedData.weights || weights);
+      } catch (err) {
+        alert('Failed to parse JSON file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  // Add / Delete Entities
+  const handleAddRoom = () => {
+    if (!newRoom.name) return;
+    const newId = `room_${Date.now()}`;
+    const roomObj = {
+      id: newId,
+      name: newRoom.name,
+      room_type: newRoom.room_type,
+      capacity: parseInt(newRoom.capacity, 10) || 60,
+      building: newRoom.building || 'Main Block',
+      floor: 1,
+      equipment: [],
+    };
+    const updated = { ...dataset, rooms: [...dataset.rooms, roomObj] };
+    setDataset(updated);
+    setShowAddRoomModal(false);
+    setNewRoom({ name: '', room_type: 'CLASSROOM', capacity: 60, building: 'Academic Block' });
+  };
+
+  const handleDeleteRoom = (roomId) => {
+    const updated = { ...dataset, rooms: dataset.rooms.filter((r) => r.id !== roomId) };
+    setDataset(updated);
+  };
+
+  const handleAddFaculty = () => {
+    if (!newFaculty.name) return;
+    const newId = `fac_${Date.now()}`;
+    const facObj = {
+      id: newId,
+      name: newFaculty.name,
+      department: newFaculty.department,
+      designation: newFaculty.designation,
+      email: '',
+      max_daily_hours: parseInt(newFaculty.max_daily_hours, 10) || 4,
+      max_weekly_hours: 18,
+      unavailable_slots: [],
+      preferred_slots: [],
+      qualified_courses: [],
+    };
+    const updated = { ...dataset, faculty: [...dataset.faculty, facObj] };
+    setDataset(updated);
+    setShowAddFacultyModal(false);
+    setNewFaculty({ name: '', department: 'Computer Science', designation: 'Assistant Professor', max_daily_hours: 4 });
+  };
+
+  const handleDeleteFaculty = (facId) => {
+    const updated = { ...dataset, faculty: dataset.faculty.filter((f) => f.id !== facId) };
+    setDataset(updated);
+  };
+
+  const handleAddCourse = () => {
+    if (!newCourse.code || !newCourse.name) return;
+    const newId = `course_${Date.now()}`;
+    const courseObj = {
+      id: newId,
+      code: newCourse.code,
+      name: newCourse.name,
+      department: newCourse.department,
+      course_type: newCourse.course_type,
+      weekly_hours: parseInt(newCourse.weekly_hours, 10) || 3,
+      credits: 3,
+      room_type_required: newCourse.room_type_required,
+      consecutive_slots: newCourse.course_type === 'LAB' ? 2 : 1,
+      faculty_ids: newCourse.faculty_id ? [newCourse.faculty_id] : [],
+      batch_ids: newCourse.batch_id ? [newCourse.batch_id] : (dataset.batches.length > 0 ? [dataset.batches[0].id] : []),
+      color: '#3b82f6',
+    };
+    const updated = { ...dataset, courses: [...dataset.courses, courseObj] };
+    setDataset(updated);
+    setShowAddCourseModal(false);
+    setNewCourse({ code: '', name: '', department: 'Computer Science', course_type: 'THEORY', weekly_hours: 3, consecutive_slots: 1, room_type_required: 'CLASSROOM', batch_id: '', faculty_id: '' });
+  };
+
+  const handleDeleteCourse = (courseId) => {
+    const updated = { ...dataset, courses: dataset.courses.filter((c) => c.id !== courseId) };
+    setDataset(updated);
+  };
 
   // Export handlers
   const handleExportExcel = async () => {
@@ -274,6 +407,15 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Hidden File Input for JSON Upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept=".json"
+        onChange={handleImportJson}
+      />
+
       {/* Top Header */}
       <header className="app-header">
         <div className="header-inner">
@@ -305,6 +447,7 @@ export default function App() {
                   {p.name} ({p.batches_count} Batches, {p.courses_count} Courses)
                 </option>
               ))}
+              <option value="custom">Custom Configured College</option>
             </select>
 
             {/* Solver Engine Selector */}
@@ -330,7 +473,7 @@ export default function App() {
             {/* Generate Action */}
             <button
               className="btn btn-primary"
-              onClick={() => runGenerate()}
+              onClick={() => runGenerate(dataset)}
               disabled={isGenerating}
             >
               <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
@@ -443,7 +586,7 @@ export default function App() {
               className={`tab-btn ${activeTab === 'dataset' ? 'active' : ''}`}
               onClick={() => setActiveTab('dataset')}
             >
-              <Layers size={16} /> Campus Data & Constraints
+              <Layers size={16} /> Campus Data & Configuration Editor
             </button>
           </div>
 
@@ -712,58 +855,359 @@ export default function App() {
           </div>
         )}
 
-        {/* View 3: Dataset & Constraints Inspector */}
+        {/* View 3: Dataset & Configuration Editor */}
         {activeTab === 'dataset' && (
-          <div className="analytics-grid">
-            <div className="analytics-card">
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', color: '#1e3a8a' }}>
-                <Building2 size={16} /> Campus Classrooms & Laboratories ({dataset.rooms.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
-                {dataset.rooms.map((r) => (
-                  <div key={r.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem' }}>
-                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.name}</div>
-                    <div style={{ color: '#64748b' }}>Type: {r.room_type} &bull; Capacity: <b>{r.capacity}</b> seats &bull; {r.building}</div>
-                  </div>
-                ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {/* Action Bar for Custom JSON Configuration */}
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                  Interactive Campus Data & Constraint Configuration
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                  All college data is 100% configurable. You can add/delete rooms, faculty, and courses, or export/import custom JSON files.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="btn btn-outline btn-sm" onClick={() => fileInputRef.current?.click()} title="Import any college JSON dataset">
+                  <Upload size={14} /> Import Custom JSON
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={handleExportJson} title="Export current config as JSON template">
+                  <Download size={14} /> Export Config JSON
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={() => runGenerate(dataset)}>
+                  <RefreshCw size={14} /> Re-Generate Schedule
+                </button>
               </div>
             </div>
 
-            <div className="analytics-card">
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', color: '#1e3a8a' }}>
-                <GraduationCap size={16} /> Faculty Profiles & Availability ({dataset.faculty.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
-                {dataset.faculty.map((f) => (
-                  <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem' }}>
-                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{f.name}</div>
-                    <div style={{ color: '#64748b' }}>{f.designation} &bull; {f.department}</div>
-                    <div style={{ fontSize: '0.72rem', color: '#e11d48', marginTop: '0.2rem' }}>
-                      Unavailable: {f.unavailable_slots.length > 0 ? `${f.unavailable_slots.length} blackout slots` : 'Full availability'}
+            <div className="analytics-grid">
+              {/* Rooms & Facilities Card */}
+              <div className="analytics-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Building2 size={16} /> Rooms & Labs ({dataset.rooms.length})
+                  </h4>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowAddRoomModal(true)}>
+                    <Plus size={14} /> Add Room
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
+                  {dataset.rooms.map((r) => (
+                    <div key={r.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.name}</div>
+                        <div style={{ color: '#64748b' }}>Type: {r.room_type} &bull; Capacity: <b>{r.capacity}</b> seats &bull; {r.building}</div>
+                      </div>
+                      <button
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                        onClick={() => handleDeleteRoom(r.id)}
+                        title="Delete Room"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="analytics-card">
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.75rem', color: '#1e3a8a' }}>
-                <BookOpen size={16} /> Courses & Laboratories ({dataset.courses.length})
-              </h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '400px', overflowY: 'auto' }}>
-                {dataset.courses.map((c) => (
-                  <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem' }}>
-                    <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.code}: {c.name}</div>
-                    <div style={{ color: '#64748b' }}>
-                      {c.course_type} &bull; {c.weekly_hours} hrs/wk ({c.consecutive_slots > 1 ? `${c.consecutive_slots}h block` : '1h lecture'}) &bull; Req: {c.room_type_required}
+              {/* Faculty Card */}
+              <div className="analytics-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <GraduationCap size={16} /> Faculty Profiles ({dataset.faculty.length})
+                  </h4>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowAddFacultyModal(true)}>
+                    <Plus size={14} /> Add Faculty
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
+                  {dataset.faculty.map((f) => (
+                    <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{f.name}</div>
+                        <div style={{ color: '#64748b' }}>{f.designation} &bull; {f.department} &bull; Max: {f.max_daily_hours}h/day</div>
+                        <div style={{ fontSize: '0.72rem', color: '#e11d48', marginTop: '0.2rem' }}>
+                          Unavailable: {f.unavailable_slots.length > 0 ? `${f.unavailable_slots.length} blackout slots` : 'Full availability'}
+                        </div>
+                      </div>
+                      <button
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                        onClick={() => handleDeleteFaculty(f.id)}
+                        title="Delete Faculty"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </div>
+
+              {/* Courses Card */}
+              <div className="analytics-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <BookOpen size={16} /> Courses & Labs ({dataset.courses.length})
+                  </h4>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowAddCourseModal(true)}>
+                    <Plus size={14} /> Add Course
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
+                  {dataset.courses.map((c) => (
+                    <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.code}: {c.name}</div>
+                        <div style={{ color: '#64748b' }}>
+                          {c.course_type} &bull; {c.weekly_hours} hrs/wk ({c.consecutive_slots > 1 ? `${c.consecutive_slots}h block` : '1h lecture'}) &bull; Req: {c.room_type_required}
+                        </div>
+                      </div>
+                      <button
+                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                        onClick={() => handleDeleteCourse(c.id)}
+                        title="Delete Course"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
       </main>
+
+      {/* Modal: Add Room */}
+      {showAddRoomModal && (
+        <div className="modal-overlay" onClick={() => setShowAddRoomModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add New Classroom or Lab</h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowAddRoomModal(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Room Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. CR-305 (Euler Hall)"
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newRoom.name}
+                  onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Facility Type</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newRoom.room_type}
+                    onChange={(e) => setNewRoom({ ...newRoom, room_type: e.target.value })}
+                  >
+                    <option value="CLASSROOM">Classroom</option>
+                    <option value="LECTURE_HALL">Lecture Hall</option>
+                    <option value="LAB_COMPUTER">Computer Lab</option>
+                    <option value="LAB_ELECTRONICS">Electronics Lab</option>
+                    <option value="SEMINAR_HALL">Seminar Hall</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Seating Capacity</label>
+                  <input
+                    type="number"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newRoom.capacity}
+                    onChange={(e) => setNewRoom({ ...newRoom, capacity: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button className="btn btn-outline" onClick={() => setShowAddRoomModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleAddRoom}>Add Facility</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Faculty */}
+      {showAddFacultyModal && (
+        <div className="modal-overlay" onClick={() => setShowAddFacultyModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add Faculty Member</h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowAddFacultyModal(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Dr. Jane Doe"
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newFaculty.name}
+                  onChange={(e) => setNewFaculty({ ...newFaculty, name: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Department</label>
+                  <input
+                    type="text"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newFaculty.department}
+                    onChange={(e) => setNewFaculty({ ...newFaculty, department: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Designation</label>
+                  <input
+                    type="text"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newFaculty.designation}
+                    onChange={(e) => setNewFaculty({ ...newFaculty, designation: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Max Daily Teaching Hours</label>
+                <input
+                  type="number"
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newFaculty.max_daily_hours}
+                  onChange={(e) => setNewFaculty({ ...newFaculty, max_daily_hours: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button className="btn btn-outline" onClick={() => setShowAddFacultyModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleAddFaculty}>Add Faculty</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Course */}
+      {showAddCourseModal && (
+        <div className="modal-overlay" onClick={() => setShowAddCourseModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add New Course / Lab</h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowAddCourseModal(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Course Code</label>
+                  <input
+                    type="text"
+                    placeholder="CS304"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCourse.code}
+                    onChange={(e) => setNewCourse({ ...newCourse, code: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Course Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Software Engineering"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCourse.name}
+                    onChange={(e) => setNewCourse({ ...newCourse, name: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Course Type</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCourse.course_type}
+                    onChange={(e) => setNewCourse({ ...newCourse, course_type: e.target.value })}
+                  >
+                    <option value="THEORY">Theory (Lecture)</option>
+                    <option value="LAB">Lab Block (Practical)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Weekly Hours</label>
+                  <input
+                    type="number"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCourse.weekly_hours}
+                    onChange={(e) => setNewCourse({ ...newCourse, weekly_hours: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Required Room Type</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCourse.room_type_required}
+                    onChange={(e) => setNewCourse({ ...newCourse, room_type_required: e.target.value })}
+                  >
+                    <option value="CLASSROOM">Classroom</option>
+                    <option value="LECTURE_HALL">Lecture Hall</option>
+                    <option value="LAB_COMPUTER">Computer Lab</option>
+                    <option value="LAB_ELECTRONICS">Electronics Lab</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Assigned Instructor</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newCourse.faculty_id}
+                    onChange={(e) => setNewCourse({ ...newCourse, faculty_id: e.target.value })}
+                  >
+                    <option value="">Any Qualified Faculty</option>
+                    {dataset.faculty.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Target Student Batch</label>
+                <select
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newCourse.batch_id}
+                  onChange={(e) => setNewCourse({ ...newCourse, batch_id: e.target.value })}
+                >
+                  <option value="">Select Batch</option>
+                  {dataset.batches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button className="btn btn-outline" onClick={() => setShowAddCourseModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleAddCourse}>Add Course</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Optimization Tuning Drawer Modal */}
       {showSettingsModal && (
