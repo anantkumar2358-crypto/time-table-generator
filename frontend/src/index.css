@@ -594,3 +594,198 @@ button, input, select {
     justify-content: space-between;
   }
 }
+
+/* ========================================================
+   Optimization Progress HUD & Telemetry Modal Styles
+   ======================================================== */
+.optim-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: optimFadeIn 0.2s ease-out;
+}
+
+@keyframes optimFadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.optim-modal-content {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  max-width: 620px;
+  width: 100%;
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  overflow: hidden;
+}
+
+.optim-header {
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #1e3a8a, #1e40af);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.optim-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.optim-engine-tag {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.optim-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Glowing Progress Bar */
+.optim-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.optim-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.optim-progress-track {
+  height: 14px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #e2e8f0;
+}
+
+.optim-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #3b82f6, #10b981);
+  background-size: 200% 100%;
+  border-radius: 9999px;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: optimShimmer 2s infinite linear;
+}
+
+@keyframes optimShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* 3-Card Telemetry HUD */
+.optim-hud-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.optim-hud-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.75rem;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.optim-hud-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.04em;
+}
+
+.optim-hud-val {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 0.15rem;
+}
+
+/* Step-by-step Milestones Checklist */
+.optim-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.optim-step-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.82rem;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+.optim-step-row.completed {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.optim-step-row.active {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.optim-step-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.optim-details-text {
+  font-size: 0.78rem;
+  color: #64748b;
+  font-style: italic;
+  padding: 0.4rem 0.6rem;
+  background: #f1f5f9;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+.optim-complete-box {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  animation: optimFadeIn 0.3s ease-out;
+}
