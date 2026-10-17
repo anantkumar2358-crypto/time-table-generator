@@ -826,7 +826,7 @@ export default function App() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: '0.75rem' }}>
         <RefreshCw className="animate-spin" size={24} color="#2563eb" />
-        <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#334155' }}>Initializing Intelligent Timetable Engine...</span>
+        <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)' }}>Initializing Intelligent Timetable Engine...</span>
       </div>
     );
   }
@@ -971,13 +971,23 @@ export default function App() {
               {isGenerating ? 'Optimizing...' : 'Generate Timetable'}
             </button>
 
-            {/* Exports */}
-            <button className="btn btn-outline btn-sm" onClick={handleExportExcel} title="Download Excel Workbook">
-              <FileSpreadsheet size={15} color="#15803d" /> Excel
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={handleExportPdf} title="Download PDF Report">
-              <FileText size={15} color="#b91c1c" /> PDF
-            </button>
+            {/* Download Exports (Right-Aligned) */}
+            <div className="header-downloads">
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={handleExportExcel}
+                title="Download Timetable as Excel Spreadsheet (.xlsx)"
+              >
+                <FileSpreadsheet size={15} color="#22c55e" /> Download Excel
+              </button>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={handleExportPdf}
+                title="Download Timetable as PDF Report"
+              >
+                <FileText size={15} color="#f87171" /> Download PDF
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -1189,18 +1199,18 @@ export default function App() {
               <>
                 <div className="timetable-header">
                   <div>
-                    <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                    <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-main)' }}>
                       {activeTab === 'batch' && currentBatch && `${currentBatch.name} — Weekly Schedule`}
                       {activeTab === 'faculty' && currentFaculty && `${currentFaculty.name} — Teaching Schedule (${currentFaculty.department})`}
                       {activeTab === 'room' && currentRoom && `${currentRoom.name} — Room Master Occupancy (${currentRoom.room_type})`}
                     </h2>
-                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       {activeTab === 'batch' && currentBatch && `Enrolled: ${currentBatch.size} students | Department: ${currentBatch.department}`}
                       {activeTab === 'faculty' && currentFaculty && `Max Load: ${currentFaculty.max_daily_hours} hrs/day | Weekly limit: ${currentFaculty.max_weekly_hours} hrs`}
                       {activeTab === 'room' && currentRoom && `Seating Capacity: ${currentRoom.capacity} seats | Location: ${currentRoom.building}, Floor ${currentRoom.floor}`}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#64748b' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                     <span className="badge-tag badge-theory">Theory</span>
                     <span className="badge-tag badge-lab">2-Hour Lab Block</span>
                     <span style={{ marginLeft: '0.5rem' }}>&bull; Click any card to inspect or move</span>
@@ -1521,7 +1531,7 @@ export default function App() {
                   <span className="pill pill-success" style={{ fontSize: '0.75rem' }}>
                     {dataset.time_config.slots_per_day} Periods / Day
                   </span>
-                  <span className="pill" style={{ background: '#ede9fe', color: '#6d28d9', fontSize: '0.75rem' }}>
+                  <span className="pill" style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#c4b5fd', fontSize: '0.75rem' }}>
                     {dataset.time_config.max_daily_lecture_hours ? `Max ${dataset.time_config.max_daily_lecture_hours}h Lectures / Day` : 'No Daily Cap'}
                   </span>
                 </div>
@@ -1529,7 +1539,7 @@ export default function App() {
 
               <div className="timing-grid-controls">
                 <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
                     Total Daily Periods / Slots
                   </label>
                   <select
@@ -1547,7 +1557,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
                     Max Daily Lectures Cap (Per Batch)
                   </label>
                   <select
@@ -1566,7 +1576,7 @@ export default function App() {
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.35rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', display: 'block', marginBottom: '0.35rem' }}>
                     Lunch Recess Placement
                   </label>
                   <select
@@ -1869,7 +1879,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowAddBatchModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add Student Batch / Section</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>Add Student Batch / Section</h3>
               <button className="btn btn-outline btn-sm" onClick={() => setShowAddBatchModal(false)}><X size={16} /></button>
             </div>
             <div className="modal-body">
@@ -1966,7 +1976,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowAddRoomModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add New Classroom or Lab</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>Add New Classroom or Lab</h3>
               <button className="btn btn-outline btn-sm" onClick={() => setShowAddRoomModal(false)}><X size={16} /></button>
             </div>
             <div className="modal-body">
@@ -2022,7 +2032,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowAddFacultyModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add Faculty Member</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>Add Faculty Member</h3>
               <button className="btn btn-outline btn-sm" onClick={() => setShowAddFacultyModal(false)}><X size={16} /></button>
             </div>
             <div className="modal-body">
@@ -2083,7 +2093,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowAddCourseModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add New Course / Lab</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)' }}>Add New Course / Lab</h3>
               <button className="btn btn-outline btn-sm" onClick={() => setShowAddCourseModal(false)}><X size={16} /></button>
             </div>
             <div className="modal-body">
@@ -2197,7 +2207,7 @@ export default function App() {
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Sliders size={20} color="#2563eb" /> Tuning Optimization Objective Weights
               </h3>
               <button className="btn btn-outline btn-sm" onClick={() => setShowSettingsModal(false)}>
@@ -2273,8 +2283,8 @@ export default function App() {
                 />
               </div>
 
-              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', marginTop: '0.5rem' }}>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e3a8a', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#60a5fa', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Clock size={16} /> Daily Lecture Duration & Periods Configuration
                 </h4>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
@@ -2494,7 +2504,7 @@ export default function App() {
               {/* Progress Bar & Stage */}
               <div className="optim-progress-section">
                 <div className="optim-progress-info">
-                  <span style={{ color: '#1e3a8a' }}>{optimProgress.stage}</span>
+                  <span style={{ color: '#60a5fa', fontWeight: 600 }}>{optimProgress.stage}</span>
                   <span style={{ color: '#2563eb', fontFamily: 'monospace', fontSize: '1.05rem' }}>{optimProgress.percent}%</span>
                 </div>
                 <div className="optim-progress-track">
@@ -2563,10 +2573,10 @@ export default function App() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                     <CheckCircle2 size={24} color="#059669" />
                     <div>
-                      <div style={{ fontWeight: 800, color: '#065f46', fontSize: '0.95rem' }}>
+                      <div style={{ fontWeight: 800, color: '#34d399', fontSize: '0.95rem' }}>
                         Optimization Complete!
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#047857' }}>
+                      <div style={{ fontSize: '0.75rem', color: '#a7f3d0' }}>
                         Zero conflicts detected &bull; Quality Score: <b>{optimProgress.quality}/100</b>
                       </div>
                     </div>

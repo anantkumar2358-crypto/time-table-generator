@@ -47,6 +47,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-main);
+}
+
+label {
+  color: var(--text-main);
+}
+
 button, input, select {
   font-family: inherit;
 }
@@ -137,7 +145,15 @@ button, input, select {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex: 1;
   flex-wrap: wrap;
+}
+
+.header-downloads {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 /* Buttons */
@@ -362,6 +378,10 @@ button, input, select {
   gap: 1rem;
 }
 
+.timetable-header h2 {
+  color: var(--text-main) !important;
+}
+
 .table-responsive {
   width: 100%;
   overflow-x: auto;
@@ -432,7 +452,7 @@ button, input, select {
   align-items: center;
   justify-content: center;
   min-height: 75px;
-  color: #334155;
+  color: #64748b;
   font-size: 0.85rem;
   user-select: none;
 }
