@@ -58,6 +58,9 @@ export default function App() {
   const [isMoving, setIsMoving] = useState(false);
 
   // Add Entity Modals
+  const [showAddBatchModal, setShowAddBatchModal] = useState(false);
+  const [newBatch, setNewBatch] = useState({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '' });
+
   const [showAddRoomModal, setShowAddRoomModal] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: '', room_type: 'CLASSROOM', capacity: 60, building: 'Academic Block' });
 
@@ -97,6 +100,12 @@ export default function App() {
 
     const targetDs = dsToUse || datasetRef.current;
     if (!targetDs) return;
+
+    if (!targetDs.batches?.length || !targetDs.courses?.length || !targetDs.rooms?.length) {
+      alert('Please configure at least 1 Batch, 1 Room, and 1 Course in the Campus Data & Configuration Editor tab before generating a timetable.');
+      setActiveTab('dataset');
+      return;
+    }
 
     const targetSolver = solver || solverTypeRef.current;
     const targetWeights = currentWeights || weightsRef.current;
@@ -381,6 +390,35 @@ export default function App() {
     setAnalytics(null);
   };
 
+  const handleAddBatch = () => {
+    if (!newBatch.name) return;
+    const newId = `batch_${Date.now()}`;
+    const batchObj = {
+      id: newId,
+      name: newBatch.name,
+      department: newBatch.department,
+      semester: parseInt(newBatch.semester, 10) || 1,
+      size: parseInt(newBatch.size, 10) || 50,
+      preferred_room_id: newBatch.preferred_room_id || '',
+    };
+    const updated = { ...dataset, batches: [...dataset.batches, batchObj] };
+    setDataset(updated);
+    if (!selectedBatchId) setSelectedBatchId(newId);
+    invalidateCurrentCache();
+    setShowAddBatchModal(false);
+    setNewBatch({ name: '', department: 'Computer Science', semester: 1, size: 50, preferred_room_id: '' });
+  };
+
+  const handleDeleteBatch = (batchId) => {
+    const updatedBatches = dataset.batches.filter((b) => b.id !== batchId);
+    const updated = { ...dataset, batches: updatedBatches };
+    setDataset(updated);
+    if (selectedBatchId === batchId) {
+      setSelectedBatchId(updatedBatches.length > 0 ? updatedBatches[0].id : '');
+    }
+    invalidateCurrentCache();
+  };
+
   const handleAddRoom = () => {
     if (!newRoom.name) return;
     const newId = `room_${Date.now()}`;
@@ -395,14 +433,19 @@ export default function App() {
     };
     const updated = { ...dataset, rooms: [...dataset.rooms, roomObj] };
     setDataset(updated);
+    if (!selectedRoomId) setSelectedRoomId(newId);
     invalidateCurrentCache();
     setShowAddRoomModal(false);
     setNewRoom({ name: '', room_type: 'CLASSROOM', capacity: 60, building: 'Academic Block' });
   };
 
   const handleDeleteRoom = (roomId) => {
-    const updated = { ...dataset, rooms: dataset.rooms.filter((r) => r.id !== roomId) };
+    const updatedRooms = dataset.rooms.filter((r) => r.id !== roomId);
+    const updated = { ...dataset, rooms: updatedRooms };
     setDataset(updated);
+    if (selectedRoomId === roomId) {
+      setSelectedRoomId(updatedRooms.length > 0 ? updatedRooms[0].id : '');
+    }
     invalidateCurrentCache();
   };
 
@@ -423,14 +466,19 @@ export default function App() {
     };
     const updated = { ...dataset, faculty: [...dataset.faculty, facObj] };
     setDataset(updated);
+    if (!selectedFacultyId) setSelectedFacultyId(newId);
     invalidateCurrentCache();
     setShowAddFacultyModal(false);
     setNewFaculty({ name: '', department: 'Computer Science', designation: 'Assistant Professor', max_daily_hours: 4 });
   };
 
   const handleDeleteFaculty = (facId) => {
-    const updated = { ...dataset, faculty: dataset.faculty.filter((f) => f.id !== facId) };
+    const updatedFac = dataset.faculty.filter((f) => f.id !== facId);
+    const updated = { ...dataset, faculty: updatedFac };
     setDataset(updated);
+    if (selectedFacultyId === facId) {
+      setSelectedFacultyId(updatedFac.length > 0 ? updatedFac[0].id : '');
+    }
     invalidateCurrentCache();
   };
 
@@ -790,12 +838,17 @@ export default function App() {
                 className="select-control"
                 value={selectedBatchId}
                 onChange={(e) => setSelectedBatchId(e.target.value)}
+                disabled={dataset.batches.length === 0}
               >
-                {dataset.batches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} (Semester {b.semester}, {b.size} Students)
-                  </option>
-                ))}
+                {dataset.batches.length === 0 ? (
+                  <option value="">No Batches Added</option>
+                ) : (
+                  dataset.batches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} (Semester {b.semester}, {b.size} Students)
+                    </option>
+                  ))
+                )}
               </select>
             )}
 
@@ -804,12 +857,17 @@ export default function App() {
                 className="select-control"
                 value={selectedFacultyId}
                 onChange={(e) => setSelectedFacultyId(e.target.value)}
+                disabled={dataset.faculty.length === 0}
               >
-                {dataset.faculty.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name} ({f.designation}, {f.department})
-                  </option>
-                ))}
+                {dataset.faculty.length === 0 ? (
+                  <option value="">No Faculty Added</option>
+                ) : (
+                  dataset.faculty.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name} ({f.designation}, {f.department})
+                    </option>
+                  ))
+                )}
               </select>
             )}
 
@@ -818,12 +876,17 @@ export default function App() {
                 className="select-control"
                 value={selectedRoomId}
                 onChange={(e) => setSelectedRoomId(e.target.value)}
+                disabled={dataset.rooms.length === 0}
               >
-                {dataset.rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} ({r.room_type}, Capacity: {r.capacity})
-                  </option>
-                ))}
+                {dataset.rooms.length === 0 ? (
+                  <option value="">No Rooms Added</option>
+                ) : (
+                  dataset.rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} ({r.room_type}, Capacity: {r.capacity})
+                    </option>
+                  ))
+                )}
               </select>
             )}
           </div>
@@ -834,24 +897,44 @@ export default function App() {
           <div className="timetable-wrapper">
             {schedule.length === 0 ? (
               /* Empty Hero Banner — no auto-optimization, user must click Generate */
-              <div className="empty-timetable-hero">
-                <div className="empty-hero-icon">
-                  <Calendar size={36} color="#2563eb" />
+              dataset.batches.length === 0 || dataset.courses.length === 0 || dataset.rooms.length === 0 ? (
+                <div className="empty-timetable-hero">
+                  <div className="empty-hero-icon" style={{ background: '#fef3c7', borderColor: '#fde68a' }}>
+                    <Layers size={36} color="#d97706" />
+                  </div>
+                  <div className="empty-hero-title">Configure Your Campus Data</div>
+                  <div className="empty-hero-desc">
+                    Your custom college currently has <b>{dataset.batches.length} batches</b>, <b>{dataset.rooms.length} rooms</b>, and <b>{dataset.courses.length} courses</b>.
+                    <br />Please add your student batches, faculty, rooms, and courses in the Data Editor to generate a conflict-free timetable.
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => setActiveTab('dataset')}
+                    style={{ marginTop: '0.5rem', padding: '0.65rem 1.5rem', fontSize: '0.95rem' }}
+                  >
+                    <Plus size={18} /> Open Campus Data Editor
+                  </button>
                 </div>
-                <div className="empty-hero-title">No Timetable Generated Yet</div>
-                <div className="empty-hero-desc">
-                  Your campus dataset is loaded with <b>{dataset.batches.length} batches</b>, <b>{dataset.courses.length} courses</b>, and <b>{dataset.rooms.length} rooms</b>.
-                  <br />Click <b>"Generate Timetable"</b> above to run the Google OR-Tools CP-SAT engine and produce a conflict-free, optimized weekly schedule.
+              ) : (
+                <div className="empty-timetable-hero">
+                  <div className="empty-hero-icon">
+                    <Calendar size={36} color="#2563eb" />
+                  </div>
+                  <div className="empty-hero-title">No Timetable Generated Yet</div>
+                  <div className="empty-hero-desc">
+                    Your campus dataset is loaded with <b>{dataset.batches.length} batches</b>, <b>{dataset.courses.length} courses</b>, and <b>{dataset.rooms.length} rooms</b>.
+                    <br />Click <b>"Generate Timetable"</b> above to run the Google OR-Tools CP-SAT engine and produce a conflict-free, optimized weekly schedule.
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => runGenerate(dataset)}
+                    disabled={isGenerating}
+                    style={{ marginTop: '0.5rem', padding: '0.65rem 1.5rem', fontSize: '0.95rem' }}
+                  >
+                    <Sparkles size={18} /> Generate Timetable Now
+                  </button>
                 </div>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => runGenerate(dataset)}
-                  disabled={isGenerating}
-                  style={{ marginTop: '0.5rem', padding: '0.65rem 1.5rem', fontSize: '0.95rem' }}
-                >
-                  <Sparkles size={18} /> Generate Timetable Now
-                </button>
-              </div>
+              )
             ) : (
               <>
                 <div className="timetable-header">
@@ -1137,6 +1220,43 @@ export default function App() {
             </div>
 
             <div className="analytics-grid">
+              {/* Student Batches Card */}
+              <div className="analytics-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Users size={16} /> Student Batches ({dataset.batches.length})
+                  </h4>
+                  <button className="btn btn-outline btn-sm" onClick={() => setShowAddBatchModal(true)}>
+                    <Plus size={14} /> Add Batch
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
+                  {dataset.batches.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                      No batches added yet. Click "+ Add Batch" above.
+                    </div>
+                  ) : (
+                    dataset.batches.map((b) => (
+                      <div key={b.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{b.name}</div>
+                          <div style={{ color: '#64748b' }}>
+                            {b.department} &bull; Semester <b>{b.semester}</b> &bull; <b>{b.size}</b> students
+                          </div>
+                        </div>
+                        <button
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                          onClick={() => handleDeleteBatch(b.id)}
+                          title="Delete Batch"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
               {/* Rooms & Facilities Card */}
               <div className="analytics-card">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -1148,21 +1268,27 @@ export default function App() {
                   </button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
-                  {dataset.rooms.map((r) => (
-                    <div key={r.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.name}</div>
-                        <div style={{ color: '#64748b' }}>Type: {r.room_type} &bull; Capacity: <b>{r.capacity}</b> seats &bull; {r.building}</div>
-                      </div>
-                      <button
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
-                        onClick={() => handleDeleteRoom(r.id)}
-                        title="Delete Room"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                  {dataset.rooms.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                      No rooms added yet. Click "+ Add Room" above.
                     </div>
-                  ))}
+                  ) : (
+                    dataset.rooms.map((r) => (
+                      <div key={r.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{r.name}</div>
+                          <div style={{ color: '#64748b' }}>Type: {r.room_type} &bull; Capacity: <b>{r.capacity}</b> seats &bull; {r.building}</div>
+                        </div>
+                        <button
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                          onClick={() => handleDeleteRoom(r.id)}
+                          title="Delete Room"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -1177,24 +1303,30 @@ export default function App() {
                   </button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
-                  {dataset.faculty.map((f) => (
-                    <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{f.name}</div>
-                        <div style={{ color: '#64748b' }}>{f.designation} &bull; {f.department} &bull; Max: {f.max_daily_hours}h/day</div>
-                        <div style={{ fontSize: '0.72rem', color: '#e11d48', marginTop: '0.2rem' }}>
-                          Unavailable: {f.unavailable_slots.length > 0 ? `${f.unavailable_slots.length} blackout slots` : 'Full availability'}
-                        </div>
-                      </div>
-                      <button
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
-                        onClick={() => handleDeleteFaculty(f.id)}
-                        title="Delete Faculty"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                  {dataset.faculty.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                      No faculty profiles added yet. Click "+ Add Faculty" above.
                     </div>
-                  ))}
+                  ) : (
+                    dataset.faculty.map((f) => (
+                      <div key={f.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{f.name}</div>
+                          <div style={{ color: '#64748b' }}>{f.designation} &bull; {f.department} &bull; Max: {f.max_daily_hours}h/day</div>
+                          <div style={{ fontSize: '0.72rem', color: '#e11d48', marginTop: '0.2rem' }}>
+                            Unavailable: {f.unavailable_slots.length > 0 ? `${f.unavailable_slots.length} blackout slots` : 'Full availability'}
+                          </div>
+                        </div>
+                        <button
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                          onClick={() => handleDeleteFaculty(f.id)}
+                          title="Delete Faculty"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -1209,29 +1341,116 @@ export default function App() {
                   </button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '420px', overflowY: 'auto' }}>
-                  {dataset.courses.map((c) => (
-                    <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.code}: {c.name}</div>
-                        <div style={{ color: '#64748b' }}>
-                          {c.course_type} &bull; {c.weekly_hours} hrs/wk ({c.consecutive_slots > 1 ? `${c.consecutive_slots}h block` : '1h lecture'}) &bull; Req: {c.room_type_required}
-                        </div>
-                      </div>
-                      <button
-                        style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
-                        onClick={() => handleDeleteCourse(c.id)}
-                        title="Delete Course"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                  {dataset.courses.length === 0 ? (
+                    <div style={{ color: '#94a3b8', fontSize: '0.8rem', textAlign: 'center', padding: '1.5rem 0' }}>
+                      No courses added yet. Click "+ Add Course" above.
                     </div>
-                  ))}
+                  ) : (
+                    dataset.courses.map((c) => (
+                      <div key={c.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.65rem', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700, color: '#0f172a' }}>{c.code}: {c.name}</div>
+                          <div style={{ color: '#64748b' }}>
+                            {c.course_type} &bull; {c.weekly_hours} hrs/wk ({c.consecutive_slots > 1 ? `${c.consecutive_slots}h block` : '1h lecture'}) &bull; Req: {c.room_type_required}
+                          </div>
+                        </div>
+                        <button
+                          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: '0.2rem' }}
+                          onClick={() => handleDeleteCourse(c.id)}
+                          title="Delete Course"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
       </main>
+
+      {/* Modal: Add Batch */}
+      {showAddBatchModal && (
+        <div className="modal-overlay" onClick={() => setShowAddBatchModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Add Student Batch / Section</h3>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowAddBatchModal(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Batch Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. CSE 1st Year - Sec A"
+                  className="select-control"
+                  style={{ width: '100%', marginTop: '0.25rem' }}
+                  value={newBatch.name}
+                  onChange={(e) => setNewBatch({ ...newBatch, name: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Department</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Computer Science"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newBatch.department}
+                    onChange={(e) => setNewBatch({ ...newBatch, department: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Semester</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newBatch.semester}
+                    onChange={(e) => setNewBatch({ ...newBatch, semester: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Enrolled Student Count</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newBatch.size}
+                    onChange={(e) => setNewBatch({ ...newBatch, size: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>Preferred Room (Optional)</label>
+                  <select
+                    className="select-control"
+                    style={{ width: '100%', marginTop: '0.25rem' }}
+                    value={newBatch.preferred_room_id}
+                    onChange={(e) => setNewBatch({ ...newBatch, preferred_room_id: e.target.value })}
+                  >
+                    <option value="">No preference</option>
+                    {dataset.rooms.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                <button className="btn btn-outline" onClick={() => setShowAddBatchModal(false)}>Cancel</button>
+                <button className="btn btn-primary" onClick={handleAddBatch}>Add Batch</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Add Room */}
       {showAddRoomModal && (
