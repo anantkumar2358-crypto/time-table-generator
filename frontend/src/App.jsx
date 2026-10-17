@@ -207,11 +207,13 @@ export default function App() {
     }
   }, []);
 
-  const loadPresetAndGenerate = useCallback(async (presetId) => {
+  const loadPresetOnly = useCallback(async (presetId) => {
     try {
       const res = await fetch(`${API_BASE}/preset/${presetId}`);
       const ds = await res.json();
       setDataset(ds);
+      setSchedule([]); // Wait for user to explicitly click Generate
+      setAnalytics(null);
       setWeights(ds.weights || weightsRef.current);
 
       if (ds.batches && ds.batches.length > 0) {
@@ -223,13 +225,10 @@ export default function App() {
       if (ds.rooms && ds.rooms.length > 0) {
         setSelectedRoomId(ds.rooms[0].id);
       }
-
-      await runGenerate(ds, solverTypeRef.current, ds.weights);
     } catch (err) {
       console.error('Error loading preset:', err);
-      setIsGenerating(false);
     }
-  }, [runGenerate]);
+  }, []);
 
   const fetchPresets = useCallback(async () => {
     try {
@@ -246,14 +245,14 @@ export default function App() {
     fetchPresets();
   }, [fetchPresets]);
 
-  // When selectedPresetId changes, load dataset and generate ONCE
+  // When selectedPresetId changes, load dataset ONLY (never auto-generate on open)
   useEffect(() => {
     if (!selectedPresetId || selectedPresetId === 'custom') return;
     if (lastLoadedPresetRef.current === selectedPresetId) return;
     lastLoadedPresetRef.current = selectedPresetId;
 
-    loadPresetAndGenerate(selectedPresetId);
-  }, [selectedPresetId, loadPresetAndGenerate]);
+    loadPresetOnly(selectedPresetId);
+  }, [selectedPresetId, loadPresetOnly]);
 
   // JSON Import & Export
   const handleExportJson = () => {
@@ -740,121 +739,183 @@ export default function App() {
         {/* View 1: Timetable Grid (Batches, Faculty, or Rooms) */}
         {(activeTab === 'batch' || activeTab === 'faculty' || activeTab === 'room') && (
           <div className="timetable-wrapper">
-            <div className="timetable-header">
-              <div>
-                <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                  {activeTab === 'batch' && currentBatch && `${currentBatch.name} — Weekly Schedule`}
-                  {activeTab === 'faculty' && currentFaculty && `${currentFaculty.name} — Teaching Schedule (${currentFaculty.department})`}
-                  {activeTab === 'room' && currentRoom && `${currentRoom.name} — Room Master Occupancy (${currentRoom.room_type})`}
-                </h2>
-                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
-                  {activeTab === 'batch' && currentBatch && `Enrolled: ${currentBatch.size} students | Department: ${currentBatch.department}`}
-                  {activeTab === 'faculty' && currentFaculty && `Max Load: ${currentFaculty.max_daily_hours} hrs/day | Weekly limit: ${currentFaculty.max_weekly_hours} hrs`}
-                  {activeTab === 'room' && currentRoom && `Seating Capacity: ${currentRoom.capacity} seats | Location: ${currentRoom.building}, Floor ${currentRoom.floor}`}
+            {schedule.length === 0 ? (
+              /* Empty Hero Banner — no auto-optimization, user must click Generate */
+              <div className="empty-timetable-hero">
+                <div className="empty-hero-icon">
+                  <Calendar size={36} color="#2563eb" />
                 </div>
+                <div className="empty-hero-title">No Timetable Generated Yet</div>
+                <div className="empty-hero-desc">
+                  Your campus dataset is loaded with <b>{dataset.batches.length} batches</b>, <b>{dataset.courses.length} courses</b>, and <b>{dataset.rooms.length} rooms</b>.
+                  <br />Click <b>"Generate Timetable"</b> above to run the Google OR-Tools CP-SAT engine and produce a conflict-free, optimized weekly schedule.
+                </div>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => runGenerate(dataset)}
+                  disabled={isGenerating}
+                  style={{ marginTop: '0.5rem', padding: '0.65rem 1.5rem', fontSize: '0.95rem' }}
+                >
+                  <Sparkles size={18} /> Generate Timetable Now
+                </button>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#64748b' }}>
-                <span className="badge-tag badge-theory">Theory</span>
-                <span className="badge-tag badge-lab">2-Hour Lab Block</span>
-                <span style={{ marginLeft: '0.5rem' }}>&bull; Click any card to inspect or move</span>
-              </div>
-            </div>
+            ) : (
+              <>
+                <div className="timetable-header">
+                  <div>
+                    <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                      {activeTab === 'batch' && currentBatch && `${currentBatch.name} — Weekly Schedule`}
+                      {activeTab === 'faculty' && currentFaculty && `${currentFaculty.name} — Teaching Schedule (${currentFaculty.department})`}
+                      {activeTab === 'room' && currentRoom && `${currentRoom.name} — Room Master Occupancy (${currentRoom.room_type})`}
+                    </h2>
+                    <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                      {activeTab === 'batch' && currentBatch && `Enrolled: ${currentBatch.size} students | Department: ${currentBatch.department}`}
+                      {activeTab === 'faculty' && currentFaculty && `Max Load: ${currentFaculty.max_daily_hours} hrs/day | Weekly limit: ${currentFaculty.max_weekly_hours} hrs`}
+                      {activeTab === 'room' && currentRoom && `Seating Capacity: ${currentRoom.capacity} seats | Location: ${currentRoom.building}, Floor ${currentRoom.floor}`}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.75rem', color: '#64748b' }}>
+                    <span className="badge-tag badge-theory">Theory</span>
+                    <span className="badge-tag badge-lab">2-Hour Lab Block</span>
+                    <span style={{ marginLeft: '0.5rem' }}>&bull; Click any card to inspect or move</span>
+                  </div>
+                </div>
 
-            <div className="table-responsive">
-              <table className="schedule-grid-table">
-                <thead>
-                  <tr>
-                    <th className="day-col-header">Day / Period</th>
-                    {slotTimes.map((timeLabel, idx) => (
-                      <th
-                        key={idx}
-                        style={{
-                          background: idx === lunchIdx ? '#fefce8' : undefined,
-                          color: idx === lunchIdx ? '#854d0e' : undefined,
-                        }}
-                      >
-                        {timeLabel}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {days.map((dayName, dayIdx) => (
-                    <tr key={dayIdx}>
-                      <td className="day-cell">{dayName}</td>
-                      {slotTimes.map((_, periodIdx) => {
-                        if (periodIdx === lunchIdx) {
-                          return (
-                            <td key={periodIdx} className="slot-cell slot-lunch">
-                              LUNCH RECESS
-                            </td>
-                          );
-                        }
-
-                        const cellSlots = cellSlotMap[`${dayIdx}_${periodIdx}`] || [];
-
-                        if (cellSlots.length === 0) {
-                          return (
-                            <td key={periodIdx} className="slot-cell">
-                              <div className="slot-empty">—</div>
-                            </td>
-                          );
+                <div className="table-responsive">
+                  <table className="schedule-grid-table">
+                    <thead>
+                      <tr>
+                        <th className="day-col-header">Day / Period</th>
+                        {slotTimes.map((timeLabel, idx) => (
+                          <th
+                            key={idx}
+                            style={{
+                              background: idx === lunchIdx ? '#fefce8' : undefined,
+                              color: idx === lunchIdx ? '#854d0e' : undefined,
+                            }}
+                          >
+                            {timeLabel}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {days.map((dayName, dayIdx) => {
+                        // Pre-compute which periods are "continuation" cells of a multi-period lab
+                        const skipPeriods = new Set();
+                        for (const s of schedule) {
+                          const isTarget =
+                            (activeTab === 'batch' && s.batch_id === selectedBatchId) ||
+                            (activeTab === 'faculty' && s.faculty_id === selectedFacultyId) ||
+                            (activeTab === 'room' && s.room_id === selectedRoomId);
+                          if (!isTarget || s.day_idx !== dayIdx) continue;
+                          if (s.duration > 1) {
+                            for (let p = s.slot_idx + 1; p < s.slot_idx + s.duration; p++) {
+                              skipPeriods.add(p);
+                            }
+                          }
                         }
 
                         return (
-                          <td key={periodIdx} className="slot-cell">
-                            {cellSlots.map((slot) => {
-                              const isStartPeriod = slot.slot_idx === periodIdx;
+                          <tr key={dayIdx}>
+                            <td className="day-cell">{dayName}</td>
+                            {slotTimes.map((_, periodIdx) => {
+                              if (periodIdx === lunchIdx) {
+                                return (
+                                  <td key={periodIdx} className="slot-cell slot-lunch">
+                                    LUNCH RECESS
+                                  </td>
+                                );
+                              }
+
+                              // Skip continuation cells of multi-period labs (already covered by colSpan)
+                              if (skipPeriods.has(periodIdx)) {
+                                return null;
+                              }
+
+                              const cellSlots = cellSlotMap[`${dayIdx}_${periodIdx}`] || [];
+
+                              if (cellSlots.length === 0) {
+                                return (
+                                  <td key={periodIdx} className="slot-cell">
+                                    <div className="slot-empty">—</div>
+                                  </td>
+                                );
+                              }
+
+                              // Determine if this cell contains a multi-period session starting here
+                              const startSlot = cellSlots.find((s) => s.slot_idx === periodIdx && s.duration > 1);
+                              const colSpanVal = startSlot ? startSlot.duration : 1;
+
                               return (
-                                <div
-                                  key={slot.id}
-                                  className="class-card"
-                                  style={{
-                                    borderLeftColor: slot.color || '#2563eb',
-                                    opacity: isStartPeriod ? 1 : 0.85,
-                                  }}
-                                  onClick={() => openInspector(slot)}
-                                  title="Click to view details or move slot"
+                                <td
+                                  key={periodIdx}
+                                  className={`slot-cell ${startSlot ? 'slot-cell-multispan' : ''}`}
+                                  colSpan={colSpanVal}
                                 >
-                                  <div className="class-card-top">
-                                    <span className="class-code">{slot.course_code}</span>
-                                    <span
-                                      className={`badge-tag ${
-                                        slot.course_type === 'LAB' ? 'badge-lab' : 'badge-theory'
-                                      }`}
-                                    >
-                                      {slot.course_type === 'LAB' ? `${slot.duration}H Lab` : 'Lecture'}
-                                    </span>
-                                  </div>
-                                  <div className="class-title">{slot.course_name}</div>
-                                  <div className="class-meta">
-                                    {activeTab !== 'faculty' && (
-                                      <div className="meta-row" title={`Faculty: ${slot.faculty_name}`}>
-                                        <GraduationCap size={12} color="#64748b" /> {slot.faculty_name}
+                                  {cellSlots.filter((s) => s.slot_idx === periodIdx).map((slot) => {
+                                    const isLab = slot.duration > 1;
+                                    // Compute the time range display for multi-period labs
+                                    const startTime = slotTimes[slot.slot_idx]?.split(' - ')[0] || '';
+                                    const endTime = slotTimes[slot.slot_idx + slot.duration - 1]?.split(' - ')[1] || '';
+
+                                    return (
+                                      <div
+                                        key={slot.id}
+                                        className={`class-card ${isLab ? 'class-card-lab-span' : ''}`}
+                                        style={{
+                                          borderLeftColor: slot.color || '#2563eb',
+                                        }}
+                                        onClick={() => openInspector(slot)}
+                                        title="Click to view details or move slot"
+                                      >
+                                        <div className="class-card-top">
+                                          <span className="class-code">{slot.course_code}</span>
+                                          <span
+                                            className={`badge-tag ${
+                                              slot.course_type === 'LAB' ? 'badge-lab' : 'badge-theory'
+                                            }`}
+                                          >
+                                            {slot.course_type === 'LAB' ? `${slot.duration}H Lab` : 'Lecture'}
+                                          </span>
+                                        </div>
+                                        <div className="class-title">{slot.course_name}</div>
+                                        {isLab && startTime && endTime && (
+                                          <div className="class-span-timing">
+                                            <Clock size={11} /> {startTime} — {endTime} ({slot.duration} periods)
+                                          </div>
+                                        )}
+                                        <div className="class-meta">
+                                          {activeTab !== 'faculty' && (
+                                            <div className="meta-row" title={`Faculty: ${slot.faculty_name}`}>
+                                              <GraduationCap size={12} color="#64748b" /> {slot.faculty_name}
+                                            </div>
+                                          )}
+                                          {activeTab !== 'room' && (
+                                            <div className="meta-row" title={`Room: ${slot.room_name}`}>
+                                              <Building2 size={12} color="#64748b" /> {slot.room_name}
+                                            </div>
+                                          )}
+                                          {activeTab !== 'batch' && (
+                                            <div className="meta-row" title={`Batch: ${slot.batch_name}`}>
+                                              <Users size={12} color="#64748b" /> {slot.batch_name}
+                                            </div>
+                                          )}
+                                        </div>
                                       </div>
-                                    )}
-                                    {activeTab !== 'room' && (
-                                      <div className="meta-row" title={`Room: ${slot.room_name}`}>
-                                        <Building2 size={12} color="#64748b" /> {slot.room_name}
-                                      </div>
-                                    )}
-                                    {activeTab !== 'batch' && (
-                                      <div className="meta-row" title={`Batch: ${slot.batch_name}`}>
-                                        <Users size={12} color="#64748b" /> {slot.batch_name}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
+                                    );
+                                  })}
+                                </td>
                               );
                             })}
-                          </td>
+                          </tr>
                         );
                       })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
 

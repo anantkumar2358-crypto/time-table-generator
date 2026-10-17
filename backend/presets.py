@@ -23,13 +23,13 @@ def get_engineering_preset() -> TimetableDataset:
             "09:00 - 10:00",
             "10:00 - 11:00",
             "11:15 - 12:15",
-            "12:15 - 13:15",
-            "13:15 - 14:00 (Lunch)",
-            "14:00 - 15:00",
-            "15:00 - 16:00",
-            "16:00 - 17:00",
+            "12:15 - 13:15 (Lunch)",
+            "13:15 - 14:15",
+            "14:15 - 15:15",
+            "15:15 - 16:15",
+            "16:15 - 17:15",
         ],
-        lunch_slot_idx=4,
+        lunch_slot_idx=3,
         break_slot_indices=[],
     )
 
@@ -79,7 +79,7 @@ def get_engineering_preset() -> TimetableDataset:
             max_daily_hours=4,
             max_weekly_hours=18,
             unavailable_slots=[],
-            preferred_slots=[[0, 2], [1, 3], [3, 0]],
+            preferred_slots=[[0, 2], [1, 1], [3, 0]],
             qualified_courses=["cs303", "cs307"],
         ),
         Faculty(
