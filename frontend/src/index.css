@@ -689,7 +689,7 @@ button, input, select {
   background: linear-gradient(90deg, #2563eb, #3b82f6, #10b981);
   background-size: 200% 100%;
   border-radius: 9999px;
-  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
   animation: optimShimmer 2s infinite linear;
 }
 

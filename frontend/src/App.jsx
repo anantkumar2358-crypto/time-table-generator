@@ -71,17 +71,41 @@ export default function App() {
 
   const [optimProgress, setOptimProgress] = useState(null);
 
+  // Synchronized state references for stable callbacks without dependency loops
+  const datasetRef = useRef(dataset);
+  datasetRef.current = dataset;
+  const solverTypeRef = useRef(solverType);
+  solverTypeRef.current = solverType;
+  const weightsRef = useRef(weights);
+  weightsRef.current = weights;
+
+  // Concurrency & lifecycle guards
+  const isGeneratingRef = useRef(false);
+  const lastLoadedPresetRef = useRef('');
+
   // Core API functions declared before useEffect for React Compiler optimization
-  const runGenerate = useCallback(async (dsToUse = dataset, solver = solverType, currentWeights = weights) => {
-    if (!dsToUse) return;
+  const runGenerate = useCallback(async (dsToUse, solver, currentWeights) => {
+    // Concurrency guard: prevents multiple concurrent or looped runs
+    if (isGeneratingRef.current) {
+      console.warn('Optimization already active, ignoring duplicate call');
+      return;
+    }
+
+    const targetDs = dsToUse || datasetRef.current;
+    if (!targetDs) return;
+
+    const targetSolver = solver || solverTypeRef.current;
+    const targetWeights = currentWeights || weightsRef.current;
+
+    isGeneratingRef.current = true;
     setIsGenerating(true);
     setMoveFeedback(null);
     setOptimProgress({
-      percent: 10,
+      percent: 15,
       stage: 'Initializing AI Scheduling Engine...',
       stepIndex: 1,
-      conflicts: 44,
-      quality: 30.0,
+      conflicts: (targetDs.courses?.length || 18) * 2,
+      quality: 28.0,
       details: 'Connecting to multi-threaded constraint solver...',
       isComplete: false,
     });
@@ -89,10 +113,10 @@ export default function App() {
     try {
       const payload = {
         dataset: {
-          ...dsToUse,
-          weights: currentWeights,
+          ...targetDs,
+          weights: targetWeights,
         },
-        solver_type: solver,
+        solver_type: targetSolver,
         max_time_seconds: 25,
         ga_population_size: 60,
         ga_generations: 150,
@@ -147,9 +171,8 @@ export default function App() {
                 setSchedule(event.result.schedule || []);
                 setAnalytics(event.result.analytics || null);
               }
-              setTimeout(() => {
-                setOptimProgress(null);
-              }, 1600);
+              // Do NOT auto-dismiss with a sudden setTimeout flicker!
+              // The user can review the 100% completion card and click "View Timetable" when ready.
             }
           } catch (e) {
             console.error('Error parsing progress stream chunk:', e);
@@ -163,8 +186,8 @@ export default function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            dataset: { ...dsToUse, weights: currentWeights },
-            solver_type: solver,
+            dataset: { ...targetDs, weights: targetWeights },
+            solver_type: targetSolver,
             max_time_seconds: 25,
             ga_population_size: 60,
             ga_generations: 150,
@@ -179,17 +202,17 @@ export default function App() {
         setOptimProgress(null);
       }
     } finally {
+      isGeneratingRef.current = false;
       setIsGenerating(false);
     }
-  }, [dataset, solverType, weights]);
+  }, []);
 
   const loadPresetAndGenerate = useCallback(async (presetId) => {
-    setIsGenerating(true);
     try {
       const res = await fetch(`${API_BASE}/preset/${presetId}`);
       const ds = await res.json();
       setDataset(ds);
-      setWeights(ds.weights || weights);
+      setWeights(ds.weights || weightsRef.current);
 
       if (ds.batches && ds.batches.length > 0) {
         setSelectedBatchId(ds.batches[0].id);
@@ -201,12 +224,12 @@ export default function App() {
         setSelectedRoomId(ds.rooms[0].id);
       }
 
-      await runGenerate(ds, solverType, ds.weights);
+      await runGenerate(ds, solverTypeRef.current, ds.weights);
     } catch (err) {
       console.error('Error loading preset:', err);
       setIsGenerating(false);
     }
-  }, [solverType, weights, runGenerate]);
+  }, [runGenerate]);
 
   const fetchPresets = useCallback(async () => {
     try {
@@ -223,11 +246,13 @@ export default function App() {
     fetchPresets();
   }, [fetchPresets]);
 
-  // When selectedPresetId changes, load dataset and generate
+  // When selectedPresetId changes, load dataset and generate ONCE
   useEffect(() => {
-    if (selectedPresetId && selectedPresetId !== 'custom') {
-      loadPresetAndGenerate(selectedPresetId);
-    }
+    if (!selectedPresetId || selectedPresetId === 'custom') return;
+    if (lastLoadedPresetRef.current === selectedPresetId) return;
+    lastLoadedPresetRef.current = selectedPresetId;
+
+    loadPresetAndGenerate(selectedPresetId);
   }, [selectedPresetId, loadPresetAndGenerate]);
 
   // JSON Import & Export
@@ -1497,11 +1522,22 @@ export default function App() {
           <div className="optim-modal-content">
             <div className="optim-header">
               <div className="optim-header-title">
-                <Sparkles size={20} className="animate-spin" />
-                <span>AI Scheduling Engine Active</span>
+                <Sparkles size={20} className={optimProgress.isComplete ? '' : 'animate-spin'} />
+                <span>{optimProgress.isComplete ? 'Schedule Optimization Completed' : 'AI Timetable Optimization Active'}</span>
               </div>
-              <div className="optim-engine-tag">
-                {solverType === 'cp_sat' ? 'Google OR-Tools CP-SAT' : 'Adaptive Genetic Algorithm'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div className="optim-engine-tag">
+                  {solverType === 'cp_sat' ? 'Google OR-Tools CP-SAT' : 'Adaptive Genetic Algorithm'}
+                </div>
+                {optimProgress.isComplete && (
+                  <button
+                    onClick={() => setOptimProgress(null)}
+                    style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center' }}
+                    title="Close Dialog"
+                  >
+                    <X size={18} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1589,8 +1625,9 @@ export default function App() {
                   <button
                     className="btn btn-primary btn-sm"
                     onClick={() => setOptimProgress(null)}
+                    style={{ padding: '0.55rem 1.25rem', fontWeight: 800, fontSize: '0.85rem' }}
                   >
-                    View Timetable
+                    View Timetable &rarr;
                   </button>
                 </div>
               )}
